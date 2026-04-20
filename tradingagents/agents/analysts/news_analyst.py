@@ -1,11 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from datetime import datetime, timedelta
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_global_news,
     get_language_instruction,
     get_news,
+    should_use_host_managed_tools,
+    safe_invoke_tool,
+    should_fallback_after_empty_tool_result,
 )
-from tradingagents.dataflows.config import get_config
 
 
 def create_news_analyst(llm):
@@ -19,8 +22,19 @@ def create_news_analyst(llm):
         ]
 
         system_message = (
-            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+            "You are a news researcher tasked with analyzing the past week's company-specific and macro news for trading relevance. Use get_news(query, start_date, end_date) for targeted news and get_global_news(curr_date, look_back_days, limit) for macro context."
+            + """
+
+Return exactly these sections:
+1. Thesis
+2. Catalysts
+3. What is priced in
+4. Forward Implication
+5. Key Risk
+6. Confidence
+
+Separate fresh information from narratives the market is likely already discounting. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative.""" 
+            + """Write this as a compact reasoning card rather than a long essay."""
             + get_language_instruction()
         )
 
@@ -46,13 +60,41 @@ def create_news_analyst(llm):
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
 
-        chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
+        use_host_managed_tools = should_use_host_managed_tools()
+        result = None
+        if not use_host_managed_tools:
+            chain = prompt | llm.bind_tools(tools)
+            result = chain.invoke(state["messages"])
 
-        report = ""
+        if use_host_managed_tools or should_fallback_after_empty_tool_result(result):
+            ticker = state["company_of_interest"]
+            start_date = (datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=7)).date().isoformat()
+            company_news = safe_invoke_tool(
+                get_news,
+                ticker=ticker,
+                start_date=start_date,
+                end_date=current_date,
+            )
+            global_news = safe_invoke_tool(
+                get_global_news,
+                curr_date=current_date,
+                look_back_days=7,
+                limit=5,
+            )
+            fallback_prompt = "\n".join(
+                [
+                    system_message,
+                    f"Current date: {current_date}.",
+                    instrument_context,
+                    "The native tool-calling path returned no tool calls and no content. Fall back to the pre-fetched data below.",
+                    f"Company and sector news:\n{company_news}",
+                    f"Macro news context:\n{global_news}",
+                    "Now write the final compact reasoning card directly.",
+                ]
+            )
+            result = llm.invoke(fallback_prompt)
 
-        if len(result.tool_calls) == 0:
-            report = result.content
+        report = str(getattr(result, "content", "") or "").strip() if len(getattr(result, "tool_calls", []) or []) == 0 else ""
 
         return {
             "messages": [result],

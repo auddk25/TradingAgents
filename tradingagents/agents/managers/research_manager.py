@@ -1,5 +1,8 @@
-
-from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_language_instruction,
+)
+from tradingagents.agents.utils.summary_memory import build_reference_summary_block
 
 
 def create_research_manager(llm, memory):
@@ -10,44 +13,52 @@ def create_research_manager(llm, memory):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        prior_run_summary = build_reference_summary_block(state.get("prior_run_summary", ""))
 
-        investment_debate_state = state["investment_debate_state"]
+        prompt_parts = [
+            "As the research manager and debate facilitator, synthesize the current run into a compact forward-looking investment view.",
+            "Treat the current evidence as primary. Do not reuse prior debate transcripts as authority.",
+            "If current evidence conflicts with the prior summary, prefer current evidence.",
+            "Do not moderate for the sake of harmony.",
+            "Explicitly say which side of the debate is more convincing and why.",
+            "If both sides are weak, say that plainly.",
+        ]
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
+        if prior_run_summary:
+            prompt_parts.append(prior_run_summary)
 
-        past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
+        prompt_parts.extend(
+            [
+                "Required output:",
+                "1. Future Business Path",
+                "2. What The Market Is Pricing",
+                "3. What Could Beat Expectations",
+                "4. What Could Miss Expectations",
+                "5. Strategic Ownership View",
+                "",
+                "Rules:",
+                "- Separate the next 4-8 quarter path from the long-term ownership case.",
+                "- Focus on what is priced in versus what the business can still deliver.",
+                "- Keep the answer concise and structured for a downstream trader.",
+                "",
+                f"Current market evidence:\n- Market report: {market_research_report}\n- Sentiment report: {sentiment_report}\n- News report: {news_report}\n- Fundamentals report: {fundamentals_report}",
+                f"Debate history:\n{history}",
+                f"{instrument_context}",
+            ]
+        )
 
-        prompt = f"""As the portfolio manager and debate facilitator, your role is to critically evaluate this round of debate and make a definitive decision: align with the bear analyst, the bull analyst, or choose Hold only if it is strongly justified based on the arguments presented.
+        prompt = "\n".join(part for part in prompt_parts if part)
+        prompt += get_language_instruction()
 
-Summarize the key points from both sides concisely, focusing on the most compelling evidence or reasoning. Your recommendation—Buy, Sell, or Hold—must be clear and actionable. Avoid defaulting to Hold simply because both sides have valid points; commit to a stance grounded in the debate's strongest arguments.
-
-Additionally, develop a detailed investment plan for the trader. This should include:
-
-Your Recommendation: A decisive stance supported by the most convincing arguments.
-Rationale: An explanation of why these arguments lead to your conclusion.
-Strategic Actions: Concrete steps for implementing the recommendation.
-Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving. Present your analysis conversationally, as if speaking naturally, without special formatting. 
-
-Here are your past reflections on mistakes:
-\"{past_memory_str}\"
-
-{instrument_context}
-
-Here is the debate:
-Debate History:
-{history}"""
         response = llm.invoke(prompt)
 
         new_investment_debate_state = {
             "judge_decision": response.content,
-            "history": investment_debate_state.get("history", ""),
-            "bear_history": investment_debate_state.get("bear_history", ""),
-            "bull_history": investment_debate_state.get("bull_history", ""),
+            "history": state["investment_debate_state"].get("history", ""),
+            "bear_history": state["investment_debate_state"].get("bear_history", ""),
+            "bull_history": state["investment_debate_state"].get("bull_history", ""),
             "current_response": response.content,
-            "count": investment_debate_state["count"],
+            "count": state["investment_debate_state"]["count"],
         }
 
         return {

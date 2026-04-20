@@ -1,7 +1,7 @@
 """Financial situation memory using BM25 for lexical similarity matching.
 
-Uses BM25 (Best Matching 25) algorithm for retrieval - no API calls,
-no token limits, works offline with any LLM provider.
+This memory stays run-local. The graph clears it before each analysis run so
+no stale reasoning is carried forward unless explicitly reintroduced.
 """
 
 from rank_bm25 import BM25Okapi
@@ -64,7 +64,7 @@ class FinancialSituationMemory:
         Returns:
             List of dicts with matched_situation, recommendation, and similarity_score
         """
-        if not self.documents or self.bm25 is None:
+        if not current_situation.strip() or not self.documents or self.bm25 is None:
             return []
 
         # Tokenize query
@@ -96,6 +96,14 @@ class FinancialSituationMemory:
         self.documents = []
         self.recommendations = []
         self.bm25 = None
+
+    def reset_for_run(self):
+        """Alias for clear() to make fresh-run resets explicit."""
+        self.clear()
+
+    def is_empty(self) -> bool:
+        """Return True when no memories are stored."""
+        return not self.documents
 
 
 if __name__ == "__main__":

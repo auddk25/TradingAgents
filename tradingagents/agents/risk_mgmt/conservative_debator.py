@@ -16,7 +16,18 @@ def create_conservative_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
 
-        prompt = f"""As the Conservative Risk Analyst, your primary objective is to protect assets, minimize volatility, and ensure steady, reliable growth. You prioritize stability, security, and risk mitigation, carefully assessing potential losses, economic downturns, and market volatility. When evaluating the trader's decision or plan, critically examine high-risk elements, pointing out where the decision may expose the firm to undue risk and where more cautious alternatives could secure long-term gains. Here is the trader's decision:
+        prompt = f"""As the Conservative Risk Analyst, focus on downside control, drawdown prevention, and where the plan needs protection.
+Assume capital preservation comes first.
+State plainly that capital preservation comes first.
+
+Respond with at most 5 bullets.
+Use only: Stance, Evidence, Portfolio Action, Counterpoint, Confidence.
+Keep the focus on short-term risk, capital protection, and sizing discipline.
+Treat drawdown risk as more important than upside regret.
+Do not soften the downside case.
+Do not write rhetorical dialogue or transcript filler.
+
+Here is the trader's decision:
 
 {trader_decision}
 
@@ -28,11 +39,11 @@ Latest World Affairs Report: {news_report}
 Company Fundamentals Report: {fundamentals_report}
 Here is the current conversation history: {history} Here is the last response from the aggressive analyst: {current_aggressive_response} Here is the last response from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
 
-Engage by questioning their optimism and emphasizing the potential downsides they may have overlooked. Address each of their counterpoints to showcase why a conservative stance is ultimately the safest path for the firm's assets. Focus on debating and critiquing their arguments to demonstrate the strength of a low-risk strategy over their approaches. Output conversationally as if you are speaking without any special formatting."""
+Engage directly with the aggressive and neutral views, but keep the answer compact and action-oriented."""
 
         response = llm.invoke(prompt)
 
-        argument = f"Conservative Analyst: {response.content}"
+        argument = f"Conservative View:\n{response.content}"
 
         new_risk_debate_state = {
             "history": history + "\n" + argument,

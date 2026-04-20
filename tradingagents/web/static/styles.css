@@ -172,6 +172,69 @@ h1 {
   color: var(--text);
 }
 
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-label-text {
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.field-help {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.field-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--accent-strong);
+  font: 700 0.78rem/1 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.field-help-trigger:hover,
+.field-help-trigger:focus-visible {
+  border-color: rgba(15, 118, 110, 0.48);
+  background: rgba(15, 118, 110, 0.14);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.field-help-popover {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .field input,
 .field select {
   width: 100%;
@@ -235,6 +298,29 @@ h1 {
   margin: 0;
   font-size: 0.88rem;
   color: var(--muted);
+}
+
+.advanced-panel {
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(31, 41, 55, 0.12);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.advanced-panel > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.advanced-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-panel__lede {
+  margin: 8px 0 12px;
 }
 
 .actions {
@@ -316,8 +402,7 @@ h1 {
 
 .progress-rail,
 .timeline-block,
-.result-block,
-.error-block {
+.path-card {
   display: grid;
   gap: 8px;
 }
@@ -412,25 +497,26 @@ h1 {
   color: var(--muted);
 }
 
-.code-block {
-  margin: 0;
+.path-card {
   padding: 12px;
-  overflow: auto;
   border-radius: var(--radius-lg);
+  border: 1px solid rgba(31, 41, 55, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.path-card--error {
+  border-color: rgba(185, 28, 28, 0.22);
+  background: rgba(185, 28, 28, 0.05);
+}
+
+.path-card__path {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
   background: #0f172a;
   color: #e2e8f0;
-  font: 0.92rem/1.6 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  white-space: pre-wrap;
+  font: 0.9rem/1.4 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   word-break: break-word;
-}
-
-.markdown-block {
-  min-height: 220px;
-}
-
-.error-details {
-  border: 1px solid rgba(185, 28, 28, 0.28);
-  background: #2a1414;
 }
 
 .card[data-status="error"] .muted {

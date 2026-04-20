@@ -14,7 +14,7 @@ from typing import Any, Literal
 from cli.main import save_report_to_disk
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.web.models import RunEvent, RunRecord, SubmissionPayload, new_submission_id
+from tradingagents.web.models import RunEvent, RunRecord, SubmissionPayload, preflight_validate_submission, new_submission_id
 from tradingagents.web.storage import create_run_dir, write_json_file
 
 RUNS: dict[str, "WebRun"] = {}
@@ -156,8 +156,14 @@ class WebRun:
         self.result_markdown = markdown
         return str(path)
 
-    def mark_completed(self, *, markdown: str, report_path: str | None = None) -> None:
-        self.status = "completed"
+    def mark_completed(
+        self,
+        *,
+        markdown: str,
+        report_path: str | None = None,
+        memory_summary_path: str | None = None,
+        memory_snapshot_path: str | None = None,
+    ) -> None:
         self.result_markdown = markdown
         if report_path:
             self.report_path = report_path
@@ -169,15 +175,17 @@ class WebRun:
                 "run_id": self.run_id,
                 "run_dir": str(self.run_dir),
                 "report_path": self.report_path,
+                "memory_summary_path": memory_summary_path,
+                "memory_snapshot_path": memory_snapshot_path,
                 "markdown": markdown,
                 "stdout_path": self.stdout_path,
                 "stderr_path": self.stderr_path,
             },
         )
+        self.status = "completed"
         self.event_queue.put(None)
 
     def mark_failed(self, exc: BaseException) -> None:
-        self.status = "failed"
         tb = traceback.format_exc()
         error_path = self.run_dir / "error.md"
         error_path.write_text(
@@ -199,10 +207,13 @@ class WebRun:
                 "traceback": tb,
             },
         )
+        self.status = "failed"
         self.event_queue.put(None)
 
 
-def start_run(payload: SubmissionPayload) -> WebRun:
+def start_run(payload: SubmissionPayload, *, skip_preflight: bool = False) -> WebRun:
+    if not skip_preflight:
+        preflight_validate_submission(payload)
     run = WebRun.create(payload)
     RUNS[run.run_id] = run
     thread = threading.Thread(target=_run_job_wrapper, args=(run,), daemon=True)
@@ -261,7 +272,7 @@ def run_analysis_job(run: WebRun) -> None:
         "portfolio_completed": False,
     }
 
-    init_agent_state = graph.propagator.create_initial_state(payload.ticker, payload.analysis_date.isoformat())
+    init_agent_state = graph.prepare_initial_state(payload.ticker, payload.analysis_date.isoformat())
     args = graph.propagator.get_graph_args()
     final_state = None
 
@@ -285,10 +296,23 @@ def run_analysis_job(run: WebRun) -> None:
 
     report_path = save_report_to_disk(final_state, payload.ticker, run.run_dir)
     markdown = Path(report_path).read_text(encoding="utf-8")
+    summary_paths = graph.persist_run_summary(
+        payload.ticker,
+        payload.analysis_date.isoformat(),
+        final_state,
+        run_id=run.run_id,
+        report_path=str(report_path),
+        error_path=run.error_path,
+    )
     run.current_step = PORTFOLIO_STAGE
     if not stage_state["portfolio_completed"]:
         run.emit_event("step_completed", "投资组合决策完成。", step=PORTFOLIO_STAGE)
-    run.mark_completed(markdown=markdown, report_path=str(report_path))
+    run.mark_completed(
+        markdown=markdown,
+        report_path=str(report_path),
+        memory_summary_path=str(summary_paths["latest_summary"]),
+        memory_snapshot_path=str(summary_paths["snapshot"]),
+    )
 
 
 def process_stream_chunk(run: WebRun, chunk: dict[str, Any], selected_analysts: list[str], stage_state: dict[str, Any]) -> None:
@@ -331,17 +355,24 @@ def persist_research_step(run: WebRun, chunk: dict[str, Any], stage_state: dict[
 
     bull_history = str(debate_state.get("bull_history", "")).strip()
     bear_history = str(debate_state.get("bear_history", "")).strip()
+    history = str(debate_state.get("history", "")).strip()
+    current_response = str(debate_state.get("current_response", "")).strip()
     judge_decision = str(debate_state.get("judge_decision", "")).strip()
+    has_research_signal = any(
+        (
+            bull_history,
+            bear_history,
+            history,
+            current_response,
+            judge_decision,
+        )
+    )
 
-    if (bull_history or bear_history or judge_decision) and not stage_state["research_started"]:
+    if has_research_signal and not stage_state["research_started"]:
         stage_state["research_started"] = True
         run.current_step = RESEARCH_STAGE
         run.emit_event("step_started", "研究团队开始辩论。", step=RESEARCH_STAGE)
 
-    if bull_history:
-        run.write_partial("research_bull", bull_history)
-    if bear_history:
-        run.write_partial("research_bear", bear_history)
     if judge_decision:
         run.write_partial("research_manager", judge_decision)
 
@@ -377,20 +408,28 @@ def persist_risk_and_portfolio_steps(run: WebRun, chunk: dict[str, Any], stage_s
     aggressive_history = str(risk_state.get("aggressive_history", "")).strip()
     conservative_history = str(risk_state.get("conservative_history", "")).strip()
     neutral_history = str(risk_state.get("neutral_history", "")).strip()
+    history = str(risk_state.get("history", "")).strip()
+    current_aggressive = str(risk_state.get("current_aggressive_response", "")).strip()
+    current_conservative = str(risk_state.get("current_conservative_response", "")).strip()
+    current_neutral = str(risk_state.get("current_neutral_response", "")).strip()
     judge_decision = str(risk_state.get("judge_decision", "")).strip()
+    has_risk_signal = any(
+        (
+            aggressive_history,
+            conservative_history,
+            neutral_history,
+            history,
+            current_aggressive,
+            current_conservative,
+            current_neutral,
+            judge_decision,
+        )
+    )
 
-    has_risk_content = aggressive_history or conservative_history or neutral_history
-    if has_risk_content and not stage_state["risk_started"]:
+    if has_risk_signal and not stage_state["risk_started"]:
         stage_state["risk_started"] = True
         run.current_step = RISK_STAGE
         run.emit_event("step_started", "风险管理开始评估。", step=RISK_STAGE)
-
-    if aggressive_history:
-        run.write_partial("risk_aggressive", aggressive_history)
-    if conservative_history:
-        run.write_partial("risk_conservative", conservative_history)
-    if neutral_history:
-        run.write_partial("risk_neutral", neutral_history)
 
     if judge_decision:
         run.write_partial("portfolio_manager", judge_decision)

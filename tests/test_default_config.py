@@ -55,6 +55,12 @@ class DefaultConfigTests(unittest.TestCase):
                 "https://explicit.example/v1",
             )
 
+    def test_openai_default_models_use_gpt_5_2(self):
+        with patch.dict(os.environ, {}, clear=True):
+            reloaded = importlib.reload(default_config)
+            self.assertEqual(reloaded.DEFAULT_CONFIG["quick_think_llm"], "gpt-5.2")
+            self.assertEqual(reloaded.DEFAULT_CONFIG["deep_think_llm"], "gpt-5.2")
+
 
 if __name__ == "__main__":
     unittest.main()

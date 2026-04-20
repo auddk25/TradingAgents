@@ -1,4 +1,11 @@
 const STAGES = ["分析师团队", "研究团队", "交易团队", "风险管理", "投资组合决策"];
+const STAGE_INDEX = new Map(STAGES.map((stage, index) => [stage, index]));
+const STATUS_PRIORITY = {
+  pending: 0,
+  running: 1,
+  completed: 2,
+  failed: 3,
+};
 
 const state = {
   formOptions: null,
@@ -8,7 +15,12 @@ const state = {
   backendUrlTouched: false,
   eventSource: null,
   currentRun: null,
+  modelTouched: {
+    quick: false,
+    deep: false,
+  },
   modelMode: {
+    main: "select",
     quick: "select",
     deep: "select",
   },
@@ -39,10 +51,32 @@ function optionLabel(option) {
   return String(option);
 }
 
+function closeAllHelpPopovers() {
+  for (const trigger of el.helpTriggers) {
+    const targetId = trigger.dataset.helpFor;
+    const popover = $(targetId ? `${targetId}_help` : "");
+    if (!popover) {
+      continue;
+    }
+    popover.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  }
+}
+
+function setHelpPopoverVisibility(trigger, visible) {
+  const targetId = trigger.dataset.helpFor;
+  const popover = $(targetId ? `${targetId}_help` : "");
+  if (!popover || !popover.textContent.trim()) {
+    return;
+  }
+  popover.hidden = !visible;
+  trigger.setAttribute("aria-expanded", visible ? "true" : "false");
+}
+
 function normalizeOptionsPayload(payload) {
   const defaults = payload?.defaults ?? {};
   const options = payload?.options ?? payload ?? {};
-  return { defaults, options };
+  return { defaults, options, field_help: payload?.field_help ?? {} };
 }
 
 function setStatus(message, kind = "muted") {
@@ -70,6 +104,9 @@ function populateSelect(select, options, selectedValue) {
 
   if (selectedValue !== undefined && selectedValue !== null && selectedValue !== "") {
     select.value = String(selectedValue);
+    if (select.value !== String(selectedValue) && select.options.length > 0) {
+      select.selectedIndex = 0;
+    }
   } else if (select.options.length > 0) {
     select.selectedIndex = 0;
   }
@@ -112,10 +149,36 @@ function shouldUseTextInput(options) {
 
 function modelElementIds(mode) {
   return {
-    select: mode === "quick" ? el.quickSelect : el.deepSelect,
-    custom: mode === "quick" ? el.quickCustom : el.deepCustom,
-    help: mode === "quick" ? el.quickHelp : el.deepHelp,
-    field: mode === "quick" ? el.quickField : el.deepField,
+    select:
+      mode === "main"
+        ? el.mainSelect
+        : mode === "quick"
+          ? el.quickSelect
+          : el.deepSelect,
+    custom:
+      mode === "main"
+        ? el.mainCustom
+        : mode === "quick"
+          ? el.quickCustom
+          : el.deepCustom,
+    help:
+      mode === "main"
+        ? el.mainHelp
+        : mode === "quick"
+          ? el.quickHelp
+          : el.deepHelp,
+    modeHint:
+      mode === "main"
+        ? el.mainModeHint
+        : mode === "quick"
+          ? el.quickModeHint
+          : el.deepModeHint,
+    field:
+      mode === "main"
+        ? el.mainField
+        : mode === "quick"
+          ? el.quickField
+          : el.deepField,
   };
 }
 
@@ -129,9 +192,7 @@ function setModelField(mode, provider, selectedValue) {
     ids.select.hidden = true;
     ids.custom.hidden = false;
     ids.custom.value = selectedValue ?? "";
-    ids.help.textContent = options.length
-      ? "当前提供方需要手动输入模型 ID。"
-      : "请输入后端期望接收的模型 ID。";
+    ids.modeHint.textContent = "当前提供方需要手动输入模型 ID。";
     ids.field.dataset.mode = "input";
     return;
   }
@@ -139,7 +200,7 @@ function setModelField(mode, provider, selectedValue) {
   populateSelect(ids.select, options, selectedValue);
   ids.select.hidden = false;
   ids.custom.hidden = true;
-  ids.help.textContent = "从后端提供的模型选项中选择。";
+  ids.modeHint.textContent = "从后端提供的模型选项中选择。";
   ids.field.dataset.mode = "select";
 }
 
@@ -169,11 +230,15 @@ function updateBackendUrlDefault(provider, defaults) {
 
 function applyProvider(provider, defaults) {
   state.currentProvider = provider;
+  state.modelTouched.quick = false;
+  state.modelTouched.deep = false;
   setProviderVisibility(provider);
   updateBackendUrlDefault(provider, defaults);
 
+  const mainDefault = defaults.main_model ?? defaults.quick_think_llm ?? "";
   const quickDefault = defaults.quick_think_llm ?? "";
   const deepDefault = defaults.deep_think_llm ?? "";
+  setModelField("main", provider, mainDefault);
   setModelField("quick", provider, quickDefault);
   setModelField("deep", provider, deepDefault);
 
@@ -241,8 +306,29 @@ function setStageStatus(step, status) {
   if (!step) {
     return;
   }
+  const currentStatus = state.stageStatus.get(step) ?? "pending";
+  if ((STATUS_PRIORITY[status] ?? 0) < (STATUS_PRIORITY[currentStatus] ?? 0)) {
+    return;
+  }
   state.stageStatus.set(step, status);
   renderStageProgress();
+}
+
+function completeEarlierRunningStages(currentStep) {
+  const currentIndex = STAGE_INDEX.get(currentStep);
+  if (currentIndex === undefined) {
+    return;
+  }
+
+  for (const stage of STAGES) {
+    const stageIndex = STAGE_INDEX.get(stage);
+    if (stageIndex === undefined || stageIndex >= currentIndex) {
+      continue;
+    }
+    if (state.stageStatus.get(stage) === "running") {
+      setStageStatus(stage, "completed");
+    }
+  }
 }
 
 function appendTimelineEvent(eventName, payload) {
@@ -269,9 +355,10 @@ function resetRunState() {
   el.responseCurrentStep.textContent = "-";
   el.responseSavedPath.textContent = "-";
   el.responseReportPath.textContent = "-";
-  el.responsePayload.textContent = "";
-  el.errorDetails.textContent = "";
-  el.errorBlock.hidden = true;
+  el.responseResultHint.textContent = "";
+  el.responseErrorPath.textContent = "-";
+  el.responseErrorHint.textContent = "";
+  el.errorCard.hidden = true;
 }
 
 function renderRunRecord(run) {
@@ -280,7 +367,8 @@ function renderRunRecord(run) {
   el.responseRunStatus.textContent = run.status ?? "-";
   el.responseCurrentStep.textContent = run.current_step ?? "-";
   el.responseSavedPath.textContent = run.run_dir ?? "-";
-  el.responseReportPath.textContent = run.report_path ?? run.error_path ?? "-";
+  el.responseReportPath.textContent = run.report_path ?? "-";
+  el.responseErrorPath.textContent = run.error_path ?? "-";
 }
 
 function updateRunStatus(status, currentStep) {
@@ -301,6 +389,7 @@ function handleRunEvent(eventName, payload) {
       break;
     case "step_started":
       updateRunStatus("running", payload.step);
+      completeEarlierRunningStages(payload.step);
       setStageStatus(payload.step, "running");
       break;
     case "step_updated":
@@ -313,7 +402,8 @@ function handleRunEvent(eventName, payload) {
     case "run_completed":
       updateRunStatus("completed", payload.step);
       el.responseReportPath.textContent = payload.report_path ?? "-";
-      el.responsePayload.textContent = payload.markdown ?? "";
+      el.responseResultHint.textContent = "完整结果请查看结果文件路径。";
+      el.errorCard.hidden = true;
       STAGES.forEach((stage) => {
         if (state.stageStatus.get(stage) === "running") {
           setStageStatus(stage, "completed");
@@ -324,14 +414,14 @@ function handleRunEvent(eventName, payload) {
       break;
     case "run_failed":
       updateRunStatus("failed", payload.step);
-      el.responseReportPath.textContent = payload.error_path ?? "-";
-      el.errorDetails.textContent = payload.traceback ?? payload.message ?? "";
-      el.errorBlock.hidden = false;
+      el.responseErrorPath.textContent = payload.error_path ?? "-";
+      el.responseErrorHint.textContent = "完整错误请查看错误文件路径。";
+      el.errorCard.hidden = false;
       if (payload.step) {
         setStageStatus(payload.step, "failed");
       }
       closeEventSource();
-      setStatus("运行失败，错误详情已保存到本地目录。", "error");
+      setStatus("运行失败，错误文件已保存到本地目录。", "error");
       break;
     default:
       break;
@@ -413,12 +503,21 @@ async function loadFormOptions() {
     defaults.llm_provider
   );
 
+  populateSelect(
+    el.mainSelect,
+    asArray(options.model_options?.[defaults.llm_provider ?? "openai"]?.main).map((option) =>
+      createOptionItem(optionLabel(option), String(optionValue(option) ?? ""))
+    ),
+    defaults.main_model ?? defaults.quick_think_llm
+  );
+
   renderAnalysts(options.analysts, defaults.analysts);
 
   el.ticker.value = defaults.ticker ?? "";
   el.analysisDate.value = defaults.analysis_date ?? "";
   el.backendUrl.value = defaults.backend_url ?? "";
   el.backendUrl.dataset.default = defaults.backend_url ?? "";
+  applyFieldHelp(payload.field_help ?? {});
 
   const provider = defaults.llm_provider ?? el.llmProvider.value;
   applyProvider(provider, defaults);
@@ -436,6 +535,41 @@ function wireEvents() {
 
   el.backendUrl.addEventListener("input", () => {
     state.backendUrlTouched = true;
+  });
+
+  const syncAdvancedModels = () => {
+    const provider = el.llmProvider.value;
+    const mainValue = getModelFieldValue("main");
+    if (!state.modelTouched.quick) {
+      setModelField("quick", provider, mainValue);
+    }
+    if (!state.modelTouched.deep) {
+      setModelField("deep", provider, mainValue);
+    }
+  };
+
+  el.mainSelect.addEventListener("change", syncAdvancedModels);
+  el.mainSelect.addEventListener("input", syncAdvancedModels);
+  el.mainCustom.addEventListener("input", syncAdvancedModels);
+  el.mainCustom.addEventListener("change", syncAdvancedModels);
+
+  el.quickSelect.addEventListener("change", () => {
+    state.modelTouched.quick = true;
+  });
+  el.quickCustom.addEventListener("input", () => {
+    state.modelTouched.quick = true;
+  });
+  el.quickCustom.addEventListener("change", () => {
+    state.modelTouched.quick = true;
+  });
+  el.deepSelect.addEventListener("change", () => {
+    state.modelTouched.deep = true;
+  });
+  el.deepCustom.addEventListener("input", () => {
+    state.modelTouched.deep = true;
+  });
+  el.deepCustom.addEventListener("change", () => {
+    state.modelTouched.deep = true;
   });
 
   el.ticker.addEventListener("blur", () => {
@@ -480,6 +614,61 @@ function wireEvents() {
       setLoading(false);
     }
   });
+
+  for (const trigger of el.helpTriggers) {
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const isOpen = trigger.getAttribute("aria-expanded") === "true";
+      closeAllHelpPopovers();
+      if (!isOpen) {
+        setHelpPopoverVisibility(trigger, true);
+      }
+    });
+
+    trigger.addEventListener("mouseenter", () => {
+      closeAllHelpPopovers();
+      setHelpPopoverVisibility(trigger, true);
+    });
+
+    trigger.addEventListener("focus", () => {
+      closeAllHelpPopovers();
+      setHelpPopoverVisibility(trigger, true);
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (
+      event.target instanceof Element &&
+      (event.target.closest(".field-help") || event.target.closest(".field-help-popover"))
+    ) {
+      return;
+    }
+    closeAllHelpPopovers();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAllHelpPopovers();
+    }
+  });
+
+  document.addEventListener("pointerover", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    if (event.target.closest(".field-help")) {
+      return;
+    }
+
+    if (event.target.closest(".field-help-popover")) {
+      return;
+    }
+
+    closeAllHelpPopovers();
+  });
 }
 
 function cacheElements() {
@@ -492,7 +681,6 @@ function cacheElements() {
   el.responseCurrentStep = $("response-current-step");
   el.responseSavedPath = $("response-saved-path");
   el.responseReportPath = $("response-report-path");
-  el.responsePayload = $("response-payload");
   el.submitButton = $("submit-button");
   el.submissionForm = $("submission-form");
   el.ticker = $("ticker");
@@ -502,21 +690,36 @@ function cacheElements() {
   el.analysts = $("analysts");
   el.llmProvider = $("llm_provider");
   el.backendUrl = $("backend_url");
+  el.advancedOptions = document.querySelector(".advanced-panel");
+  el.mainSelect = $("main_model");
+  el.mainCustom = $("main_model_custom");
+  el.mainHelp = $("main_model_help");
+  el.mainModeHint = $("main_model_mode_hint");
+  el.mainField = document.querySelector('[data-model-field="main"]');
   el.quickSelect = $("quick_think_llm");
   el.quickCustom = $("quick_think_llm_custom");
-  el.quickHelp = document.querySelector('[data-model-help="quick"]');
+  el.quickHelp = $("quick_think_llm_help");
+  el.quickModeHint = $("quick_think_llm_mode_hint");
   el.quickField = document.querySelector('[data-model-field="quick"]');
   el.deepSelect = $("deep_think_llm");
   el.deepCustom = $("deep_think_llm_custom");
-  el.deepHelp = document.querySelector('[data-model-help="deep"]');
+  el.deepHelp = $("deep_think_llm_help");
+  el.deepModeHint = $("deep_think_llm_mode_hint");
   el.deepField = document.querySelector('[data-model-field="deep"]');
   el.googleThinkingLevel = $("google_thinking_level");
   el.openaiReasoningEffort = $("openai_reasoning_effort");
   el.anthropicEffort = $("anthropic_effort");
+  el.researchDepthHelp = $("research_depth_help");
+  el.googleThinkingLevelHelp = $("google_thinking_level_help");
+  el.openaiReasoningEffortHelp = $("openai_reasoning_effort_help");
+  el.anthropicEffortHelp = $("anthropic_effort_help");
   el.stageProgress = $("stage-progress");
   el.eventTimeline = $("event-timeline");
-  el.errorDetails = $("error-details");
-  el.errorBlock = $("error-block");
+  el.responseResultHint = $("response-result-hint");
+  el.responseErrorPath = $("response-error-path");
+  el.responseErrorHint = $("response-error-hint");
+  el.errorCard = $("error-card");
+  el.helpTriggers = Array.from(document.querySelectorAll(".field-help-trigger"));
 }
 
 function populateStaticChoices() {
@@ -548,6 +751,31 @@ function populateStaticChoices() {
     ],
     ""
   );
+}
+
+function applyFieldHelp(fieldHelp) {
+  const helpMap = {
+    research_depth: el.researchDepthHelp,
+    main_model: el.mainHelp,
+    quick_think_llm: el.quickHelp,
+    deep_think_llm: el.deepHelp,
+    google_thinking_level: el.googleThinkingLevelHelp,
+    openai_reasoning_effort: el.openaiReasoningEffortHelp,
+    anthropic_effort: el.anthropicEffortHelp,
+  };
+
+  for (const [fieldName, target] of Object.entries(helpMap)) {
+    const text = fieldHelp[fieldName] ?? "";
+    target.textContent = text;
+    target.hidden = true;
+  }
+
+  for (const trigger of el.helpTriggers) {
+    const fieldName = trigger.dataset.helpFor;
+    const hasText = Boolean(fieldName && (fieldHelp[fieldName] ?? "").trim());
+    trigger.hidden = !hasText;
+    trigger.setAttribute("aria-expanded", "false");
+  }
 }
 
 async function main() {

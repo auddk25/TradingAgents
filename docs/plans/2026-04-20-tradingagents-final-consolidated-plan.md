@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Improve TradingAgents in three linked areas: compress intermediate agent output without losing reasoning fidelity, upgrade final decisions to focus on future business path versus market expectations, and simplify the local web UI so ordinary use is understandable while advanced controls remain available.
+**Goal:** Improve TradingAgents in four linked areas: compress intermediate agent output without losing reasoning fidelity, upgrade final decisions to focus on future business path versus market expectations, simplify the local web UI so ordinary use is understandable while advanced controls remain available, and guarantee that every analysis run starts from a clean analytical context while allowing only a short ticker-specific prior summary to carry forward.
 
-**Architecture:** Keep the existing multi-agent graph and local FastAPI web shell, but change the shape of information flowing through the system. Intermediate agent outputs become short structured reasoning cards instead of long narrative transcripts; final decision makers explicitly separate short-term tactical view from long-term strategic ownership; the web UI defaults to a simple form with explanations, optional advanced settings, preflight model validation, and path-first run results instead of dumping large Markdown and traceback blobs.
+**Architecture:** Keep the existing multi-agent graph and local FastAPI web shell, but change the shape of information flowing through the system. Intermediate agent outputs become short structured reasoning cards instead of long narrative transcripts; final decision makers explicitly separate short-term tactical view from long-term strategic ownership; the web UI defaults to a simple form with explanations, optional advanced settings, preflight model validation, and path-first run results instead of dumping large Markdown and traceback blobs; and each run gets a fresh execution context with no prior debate history while allowing one short per-ticker carry-forward summary for continuity at selected high-level nodes.
 
 **Tech Stack:** Python, LangGraph, LangChain/OpenAI-compatible clients, FastAPI, Server-Sent Events (SSE), static HTML/CSS/JavaScript, pytest
 
@@ -36,14 +36,20 @@
   Responsibility: compact base-case balancing argument
 - `tradingagents/agents/managers/portfolio_manager.py`
   Responsibility: final short-term vs long-term decision split, valuation gap framing, portfolio action
+- `tradingagents/agents/utils/memory.py`
+  Responsibility: support explicit reset behavior and short-summary storage for cross-run analytical memory
+- `tradingagents/agents/utils/summary_memory.py`
+  Responsibility: read/write ticker-scoped carry-forward summaries and structured memory snapshots
 - `cli/main.py`
   Responsibility: save and display compact report structure instead of replaying all debate transcripts
+- `tradingagents/graph/trading_graph.py`
+  Responsibility: construct fresh run-scoped memories and avoid carrying prior analytical context into new runs
 - `tradingagents/web/models.py`
   Responsibility: form defaults, field help, advanced-field metadata, safer default model selection
 - `tradingagents/web/app.py`
   Responsibility: preflight model validation endpoint or integrated preflight before run creation
 - `tradingagents/web/runner.py`
-  Responsibility: shared model preflight, compact partial persistence, path-only result/error metadata
+  Responsibility: shared model preflight, compact partial persistence, path-only result/error metadata, and pre-run cleanup/isolation
 - `tradingagents/web/static/index.html`
   Responsibility: simplified form layout, advanced toggle, explanatory text, compact result/error cards
 - `tradingagents/web/static/app.js`
@@ -243,7 +249,96 @@ Expected: FAIL shifts downstream to manager and report formatting until those ar
 Run: `uv run --with pytest python -m pytest -q tests/test_report_structure.py`
 Expected: PASS for future-pricing and horizon-split output structure.
 
-### Task 4: Shrink Saved Reports And Web Partials To Decision-Relevant Content
+### Task 4: Enforce Fresh Analysis Context While Allowing A Short Prior Summary
+
+**Files:**
+- Modify: `tradingagents/graph/trading_graph.py`
+- Modify: `tradingagents/agents/utils/memory.py`
+- Modify: `tradingagents/web/runner.py`
+- Modify: `cli/main.py`
+- Modify: `tests/test_report_structure.py`
+
+- [ ] **Step 1: Add a test that each run starts with empty analytical history**
+
+```python
+def test_new_run_starts_with_empty_debate_state_and_only_optional_summary_memory():
+    graph = TradingAgentsGraph(config=make_test_config())
+    state = graph.propagator.create_initial_state("TSM", "2026-04-20")
+    assert state["investment_debate_state"]["history"] == ""
+    assert state["risk_debate_state"]["history"] == ""
+    assert state.get("prior_run_summary", "") == ""
+```
+
+- [ ] **Step 2: Keep data caching separate from reasoning memory**
+
+```python
+# market/news/fundamental data cache may persist for speed
+# full past analytical recommendations must not be injected into prompts
+# only a short per-ticker summary may be loaded
+config["enable_summary_memory"] = True
+```
+
+- [ ] **Step 3: Add ticker-scoped memory storage with current and historical summary files**
+
+```python
+repo/memory_runs/<ticker>/latest_summary.md
+repo/memory_runs/<ticker>/summaries/<timestamp>.md
+repo/memory_runs/<ticker>/snapshots/<timestamp>.json
+```
+
+- [ ] **Step 4: Make every web and CLI run explicitly reset run-scoped artifacts before execution**
+
+```python
+def reset_run_context(graph: TradingAgentsGraph) -> None:
+    graph.bull_memory.clear()
+    graph.bear_memory.clear()
+    graph.trader_memory.clear()
+    graph.invest_judge_memory.clear()
+    graph.portfolio_manager_memory.clear()
+```
+
+- [ ] **Step 5: Ensure no prior run output directory is read back into the next run**
+
+```python
+# write to a fresh timestamped run dir
+# do not read partials, complete_report.md, or prior engine_results as prompt context
+```
+
+- [ ] **Step 6: Inject only the short summary into selected high-level nodes**
+
+```python
+# allowed:
+research_manager_context["prior_run_summary"] = summary_text
+portfolio_manager_context["prior_run_summary"] = summary_text
+
+# not allowed:
+bull_prompt["prior_full_report"] = ...
+```
+
+- [ ] **Step 7: Generate a new short summary after each completed run**
+
+```python
+summary = build_run_summary(final_state)
+write_latest_summary(ticker, summary)
+write_summary_snapshot(run_id, ticker, summary, metadata)
+```
+
+- [ ] **Step 8: Document this explicitly in the user-facing behavior**
+
+```markdown
+- Every analysis starts from a clean analytical context.
+- Prior debate text and full reports are not fed into the next run.
+- Only one short ticker-scoped prior summary may be reused.
+- The summary may be empty on the first run.
+- Data caches may be reused for speed, but they are not treated as prior investment reasoning.
+```
+
+- [ ] **Step 9: Run targeted tests**
+
+Run: `uv run --with pytest python -m pytest -q tests/test_report_structure.py`
+Expected: PASS.
+
+### Task 5: Shrink Saved Reports And Web Partials To Decision-Relevant Content
 
 **Files:**
 - Modify: `cli/main.py`
@@ -281,7 +376,7 @@ run.write_partial("portfolio_manager", final_decision)
 Run: `uv run --with pytest python -m pytest -q tests/test_report_structure.py tests/test_web_app.py`
 Expected: PASS.
 
-### Task 5: Simplify The Web UI And Add Preflight Validation
+### Task 6: Simplify The Web UI And Add Preflight Validation
 
 **Files:**
 - Modify: `tradingagents/web/models.py`
@@ -352,7 +447,7 @@ case "run_failed":
 Run: `uv run --with pytest python -m pytest -q tests/test_web_app.py`
 Expected: PASS.
 
-### Task 6: Documentation And Manual Validation
+### Task 7: Documentation And Manual Validation
 
 **Files:**
 - Modify: `README.md`
@@ -364,6 +459,9 @@ Expected: PASS.
 - `主模型`: default model for the whole run
 - `高级选项`: only needed when you want different quick/deep models or provider-specific reasoning knobs
 - Final decisions separate short-term tactical action from long-term ownership view
+- Every analysis starts from a clean context; previous analytical outputs are not reused
+- Only a short ticker-specific summary may carry into the next run
+- Full prior reports and debates are never injected back as prompt context
 - Full results and errors live under `web_runs/`
 ```
 

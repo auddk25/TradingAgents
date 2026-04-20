@@ -1,9 +1,12 @@
-from tradingagents.agents.utils.agent_utils import build_instrument_context, get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_language_instruction,
+)
+from tradingagents.agents.utils.summary_memory import build_reference_summary_block
 
 
 def create_portfolio_manager(llm, memory):
     def portfolio_manager_node(state) -> dict:
-
         instrument_context = build_instrument_context(state["company_of_interest"])
 
         history = state["risk_debate_state"]["history"]
@@ -14,45 +17,53 @@ def create_portfolio_manager(llm, memory):
         sentiment_report = state["sentiment_report"]
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]
+        prior_run_summary = build_reference_summary_block(state.get("prior_run_summary", ""))
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
+        prompt_parts = [
+            "As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final decision.",
+            "Treat the current evidence as primary. This is a fresh run.",
+            "If current evidence conflicts with the prior summary, prefer current evidence.",
+            "Do not average away disagreement.",
+            "Choose the side with the stronger evidence and say why.",
+            "A conditional bullish tactical trade is not the same as a proven long-term ownership case.",
+        ]
 
-        past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
+        if prior_run_summary:
+            prompt_parts.append(prior_run_summary)
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+        prompt_parts.extend(
+            [
+                f"Instrument context:\n{instrument_context}",
+                "Current evidence:",
+                f"- Research Manager investment plan: {research_plan}",
+                f"- Trader transaction proposal: {trader_plan}",
+                f"- Market report: {market_research_report}",
+                f"- Sentiment report: {sentiment_report}",
+                f"- News report: {news_report}",
+                f"- Fundamentals report: {fundamentals_report}",
+                "",
+                "Required Output Structure:",
+                "1. Rating",
+                "2. Chinese Summary",
+                "3. Short-Term View",
+                "4. Long-Term Ownership View",
+                "5. What The Market Is Pricing",
+                "6. Gap Between Price And Future Path",
+                "7. Portfolio Action",
+                "8. Risk Triggers",
+                "",
+                "Rating Scale (use exactly one): Buy, Overweight, Hold, Underweight, Sell.",
+                "Portfolio Action must choose exactly one of: Exit fully, Trim position, Hold core position, Add gradually, Wait for better entry.",
+                "Rules:",
+                "- Separate short-term tactical action from long-term ownership judgment.",
+                "- Explain the market pricing gap against the likely future business path.",
+                "- Keep the answer concise, decisive, and evidence-based.",
+                f"Risk analysts' debate history:\n{history}",
+                f"{get_language_instruction()}",
+            ]
+        )
 
-{instrument_context}
-
----
-
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
-
-**Context:**
-- Research Manager's investment plan: **{research_plan}**
-- Trader's transaction proposal: **{trader_plan}**
-- Lessons from past decisions: **{past_memory_str}**
-
-**Required Output Structure:**
-1. **Rating**: State one of Buy / Overweight / Hold / Underweight / Sell.
-2. **Executive Summary**: A concise action plan covering entry strategy, position sizing, key risk levels, and time horizon.
-3. **Investment Thesis**: Detailed reasoning anchored in the analysts' debate and past reflections.
-
----
-
-**Risk Analysts Debate History:**
-{history}
-
----
-
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+        prompt = "\n".join(part for part in prompt_parts if part)
 
         response = llm.invoke(prompt)
 

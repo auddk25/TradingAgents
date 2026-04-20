@@ -12,7 +12,16 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from tradingagents.web.models import FormOptionsResponse, RunEvent, RunRecord, SubmissionPayload, SubmissionRecord, build_form_options
+from tradingagents.web.models import (
+    FormOptionsResponse,
+    RunEvent,
+    RunRecord,
+    SubmissionPayload,
+    SubmissionRecord,
+    UnsupportedModelError,
+    build_form_options,
+    preflight_validate_submission,
+)
 from tradingagents.web.runner import get_run, start_run
 from tradingagents.web.storage import save_submission
 
@@ -45,7 +54,11 @@ def create_submission(payload: SubmissionPayload):
 
 @app.post("/api/runs", response_model=RunRecord)
 def create_run(payload: SubmissionPayload):
-    return start_run(payload).to_record()
+    try:
+        preflight_validate_submission(payload)
+    except UnsupportedModelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return start_run(payload, skip_preflight=True).to_record()
 
 
 @app.get("/api/runs/{run_id}", response_model=RunRecord)
