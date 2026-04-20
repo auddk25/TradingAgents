@@ -17,10 +17,14 @@ def create_aggressive_debator(llm):
         trader_decision = state["trader_investment_plan"]
 
         prompt = f"""As the Aggressive Risk Analyst, stress upside asymmetry, bold sizing, and where caution may miss returns.
+Treat missing upside as also a risk.
+State plainly that missing upside is also a risk.
 
 Respond with at most 5 bullets.
 Use only: Stance, Evidence, Portfolio Action, Counterpoint, Confidence.
 Keep the focus on short-term positioning, upside capture, and sizing.
+Push for size when the upside asymmetry is real.
+Do not compromise just to sound balanced.
 Do not write rhetorical dialogue or transcript filler.
 
 Here is the trader's decision:

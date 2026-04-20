@@ -13,7 +13,7 @@ from tradingagents.default_config import get_provider_base_url
 from tradingagents.llm_clients.model_catalog import get_model_options
 from tradingagents.web.app import app
 from tradingagents.web import runner as web_runner
-from tradingagents.web.models import UnsupportedModelError
+from tradingagents.web.models import SubmissionPayload, UnsupportedModelError
 
 
 @pytest.fixture
@@ -69,12 +69,12 @@ def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response
         "research_depth": 1,
         "llm_provider": "openai",
         "backend_url": get_provider_base_url("openai"),
-        "quick_think_llm": "gpt-5.4",
-        "deep_think_llm": "gpt-5.4",
+        "quick_think_llm": "gpt-5.2",
+        "deep_think_llm": "gpt-5.2",
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
         "anthropic_effort": "high",
-        "main_model": "gpt-5.4",
+        "main_model": "gpt-5.2",
     }
 
     options = payload["options"]
@@ -153,8 +153,9 @@ def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response
         "openai_reasoning_effort": "控制 OpenAI 推理调用的推理强度，不等于研究轮次。",
         "anthropic_effort": "控制 Anthropic 推理调用的思考强度，不等于研究轮次。",
     }
-    assert options["model_options"]["openai"]["quick"][0]["label"].startswith("GPT-5.4 Mini - ")
-    assert "快速" in options["model_options"]["openai"]["quick"][0]["label"]
+    assert options["model_options"]["openai"]["quick"][0]["value"] == "gpt-5.2"
+    assert options["model_options"]["openai"]["deep"][0]["value"] == "gpt-5.2"
+    assert options["model_options"]["openai"]["main"][0]["value"] == "gpt-5.2"
     assert options["model_options"]["openrouter"]["quick"] == [
         {"label": "自定义模型 ID", "value": ""}
     ]
@@ -192,6 +193,14 @@ def test_frontend_script_uses_bound_main_model_element_name():
 
     assert "el.mainSelect" in source
     assert "el.mainModel" not in source
+
+
+def test_frontend_script_prevents_stage_status_regression():
+    source = Path("tradingagents/web/static/app.js").read_text(encoding="utf-8")
+
+    assert "STATUS_PRIORITY" in source
+    assert "completeEarlierRunningStages" in source
+    assert "completeEarlierRunningStages(payload.step);" in source
 
 
 def test_submission_persists_normalized_payload_in_repo_local_web_runs_dir(
@@ -244,6 +253,65 @@ def parse_sse_events(chunks: Iterator[str]) -> list[tuple[str, dict]]:
         if event_name and data is not None:
             events.append((event_name, data))
     return events
+
+
+def test_empty_initial_state_does_not_mark_research_or_risk_as_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample_payload: dict
+):
+    monkeypatch.chdir(tmp_path)
+
+    run = web_runner.WebRun.create(SubmissionPayload.model_validate(sample_payload))
+    stage_state = {
+        "analysts_started": False,
+        "analysts_completed": False,
+        "analyst_reports": set(),
+        "research_started": False,
+        "research_completed": False,
+        "trading_started": False,
+        "trading_completed": False,
+        "risk_started": False,
+        "risk_completed": False,
+        "portfolio_started": False,
+        "portfolio_completed": False,
+    }
+
+    empty_chunk = {
+        "investment_debate_state": {
+            "bull_history": "",
+            "bear_history": "",
+            "history": "",
+            "current_response": "",
+            "judge_decision": "",
+            "count": 0,
+        },
+        "risk_debate_state": {
+            "aggressive_history": "",
+            "conservative_history": "",
+            "neutral_history": "",
+            "history": "",
+            "latest_speaker": "",
+            "current_aggressive_response": "",
+            "current_conservative_response": "",
+            "current_neutral_response": "",
+            "judge_decision": "",
+            "count": 0,
+        },
+        "trader_investment_plan": "",
+    }
+
+    web_runner.process_stream_chunk(run, empty_chunk, ["market", "news", "fundamentals"], stage_state)
+
+    started_steps = [
+        event.step
+        for event in run.events
+        if event.event == "step_started"
+    ]
+    assert web_runner.RESEARCH_STAGE not in started_steps
+    assert web_runner.RISK_STAGE not in started_steps
+    assert web_runner.PORTFOLIO_STAGE not in started_steps
+    assert stage_state["research_started"] is False
+    assert stage_state["risk_started"] is False
+    assert stage_state["portfolio_started"] is False
 
 
 def wait_for_terminal_status(client: TestClient, run_id: str) -> dict:
@@ -394,6 +462,40 @@ def test_run_creation_rejects_gateway_unavailable_model_before_background_start(
     assert "gpt-5.4-mini" in response.text
     assert "当前网关不支持这个模型" in response.text
     assert web_runner.RUNS == {}
+
+
+def test_run_creation_allows_transient_probe_failure_to_reach_runtime_resilience(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, sample_payload: dict
+):
+    class DummyRun:
+        def to_record(self):
+            from tradingagents.web.models import RunRecord
+
+            return RunRecord(
+                run_id="run123",
+                status="queued",
+                run_dir="E:\\code\\TradingAgents\\repo\\web_runs\\dummy",
+            )
+
+    def fake_probe(payload, model, field_label):
+        from tradingagents.web.models import TransientModelProbeError
+
+        raise TransientModelProbeError(
+            f"模型探测警告：{model}。运行前探测遇到瞬时网关错误，将交给运行时容错继续处理。"
+        )
+
+    monkeypatch.setattr("tradingagents.web.models.probe_runtime_model_availability", fake_probe)
+    monkeypatch.setattr("tradingagents.web.app.start_run", lambda payload, skip_preflight=True: DummyRun())
+
+    payload = dict(sample_payload)
+    payload["quick_think_llm"] = "gpt-5.2"
+    payload["deep_think_llm"] = "gpt-5.2"
+    payload["backend_url"] = "https://gateway.example/v1"
+
+    response = client.post("/api/runs", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["run_id"] == "run123"
 
 
 @pytest.mark.parametrize(

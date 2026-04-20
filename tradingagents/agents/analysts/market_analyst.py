@@ -1,11 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from datetime import datetime, timedelta
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_indicators,
     get_language_instruction,
     get_stock_data,
+    should_use_host_managed_tools,
+    safe_invoke_tool,
+    should_fallback_after_empty_tool_result,
 )
-from tradingagents.dataflows.config import get_config
 
 
 def create_market_analyst(llm):
@@ -81,14 +84,42 @@ Focus on the current market regime, what traders appear to be pricing right now,
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
 
-        chain = prompt | llm.bind_tools(tools)
+        use_host_managed_tools = should_use_host_managed_tools()
+        result = None
+        if not use_host_managed_tools:
+            chain = prompt | llm.bind_tools(tools)
+            result = chain.invoke(state["messages"])
 
-        result = chain.invoke(state["messages"])
+        if use_host_managed_tools or should_fallback_after_empty_tool_result(result):
+            ticker = state["company_of_interest"]
+            start_date = (datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=90)).date().isoformat()
+            stock_data = safe_invoke_tool(
+                get_stock_data,
+                symbol=ticker,
+                start_date=start_date,
+                end_date=current_date,
+            )
+            indicators = safe_invoke_tool(
+                get_indicators,
+                symbol=ticker,
+                indicator="close_50_sma,close_200_sma,close_10_ema,macd,macdh,rsi,atr,vwma",
+                curr_date=current_date,
+                look_back_days=60,
+            )
+            fallback_prompt = "\n".join(
+                [
+                    system_message,
+                    f"Current date: {current_date}.",
+                    instrument_context,
+                    "The native tool-calling path returned no tool calls and no content. Fall back to the pre-fetched data below.",
+                    f"Prefetched stock data:\n{stock_data}",
+                    f"Prefetched indicators:\n{indicators}",
+                    "Now write the final compact reasoning card directly.",
+                ]
+            )
+            result = llm.invoke(fallback_prompt)
 
-        report = ""
-
-        if len(result.tool_calls) == 0:
-            report = result.content
+        report = str(getattr(result, "content", "") or "").strip() if len(getattr(result, "tool_calls", []) or []) == 0 else ""
 
         return {
             "messages": [result],

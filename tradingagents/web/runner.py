@@ -353,9 +353,22 @@ def persist_research_step(run: WebRun, chunk: dict[str, Any], stage_state: dict[
     if not debate_state:
         return
 
+    bull_history = str(debate_state.get("bull_history", "")).strip()
+    bear_history = str(debate_state.get("bear_history", "")).strip()
+    history = str(debate_state.get("history", "")).strip()
+    current_response = str(debate_state.get("current_response", "")).strip()
     judge_decision = str(debate_state.get("judge_decision", "")).strip()
+    has_research_signal = any(
+        (
+            bull_history,
+            bear_history,
+            history,
+            current_response,
+            judge_decision,
+        )
+    )
 
-    if not stage_state["research_started"]:
+    if has_research_signal and not stage_state["research_started"]:
         stage_state["research_started"] = True
         run.current_step = RESEARCH_STAGE
         run.emit_event("step_started", "研究团队开始辩论。", step=RESEARCH_STAGE)
@@ -392,9 +405,28 @@ def persist_risk_and_portfolio_steps(run: WebRun, chunk: dict[str, Any], stage_s
     if not risk_state:
         return
 
+    aggressive_history = str(risk_state.get("aggressive_history", "")).strip()
+    conservative_history = str(risk_state.get("conservative_history", "")).strip()
+    neutral_history = str(risk_state.get("neutral_history", "")).strip()
+    history = str(risk_state.get("history", "")).strip()
+    current_aggressive = str(risk_state.get("current_aggressive_response", "")).strip()
+    current_conservative = str(risk_state.get("current_conservative_response", "")).strip()
+    current_neutral = str(risk_state.get("current_neutral_response", "")).strip()
     judge_decision = str(risk_state.get("judge_decision", "")).strip()
+    has_risk_signal = any(
+        (
+            aggressive_history,
+            conservative_history,
+            neutral_history,
+            history,
+            current_aggressive,
+            current_conservative,
+            current_neutral,
+            judge_decision,
+        )
+    )
 
-    if not stage_state["risk_started"]:
+    if has_risk_signal and not stage_state["risk_started"]:
         stage_state["risk_started"] = True
         run.current_step = RISK_STAGE
         run.emit_event("step_started", "风险管理开始评估。", step=RISK_STAGE)

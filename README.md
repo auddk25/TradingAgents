@@ -65,6 +65,20 @@ TradingAgents is a multi-agent trading framework that mirrors the dynamics of re
 
 Our framework decomposes complex trading tasks into specialized roles. This ensures the system achieves a robust, scalable approach to market analysis and decision-making.
 
+## What This Fork Changes
+
+This fork keeps the original multi-agent structure, but changes the runtime and output behavior in several important ways:
+
+- **Local web console with live progress**: adds a single-user web app (`tradingagents-web`) that accepts the same core parameters as the CLI, streams run progress with SSE, and saves all run artifacts under `web_runs/`.
+- **Repository-local run persistence**: reports, logs, partial markdown files, and failure traces are written into the repo working directory instead of user-profile temp locations. Ticker-scoped carry-forward summaries are stored under `memory_runs/`.
+- **Custom gateway support for OpenAI-compatible APIs**: `OPENAI_BASE_URL` is treated as the source of truth for gateway routing. Official OpenAI defaults to Responses API; custom gateways default to Chat Completions, with `OPENAI_API_MODE` available as an override.
+- **Runtime resilience layer**: model calls now use retry, jitter, empty-response detection, and fallback-model handling to survive unstable custom gateway behavior.
+- **Capability adapter for weak tool-calling gateways**: when native tool calling is unreliable, analyst agents automatically switch to host-managed data fetching and then ask the LLM to summarize that evidence.
+- **Cleaner intermediate reasoning**: analyst, research, and risk prompts are compressed into compact reasoning cards instead of long transcript-style debate dumps.
+- **Stronger forward-looking investment framing**: manager prompts now force separation between short-term tactical trade views and long-term ownership cases, with explicit focus on what the market has already priced in versus what the business may still deliver.
+- **Sharper debate style**: bull/bear researchers, risk debaters, trader, and managers are prompted to take clearer positions instead of averaging disagreement away.
+- **Simplified decision language**: final outputs now include both a rating and a concrete portfolio action such as `Trim position`, `Hold core position`, `Add gradually`, or `Wait for better entry`.
+
 ### Analyst Team
 - Fundamentals Analyst: Evaluates company financials and performance metrics, identifying intrinsic values and potential red flags.
 - Sentiment Analyst: Analyzes social media and public sentiment using sentiment scoring algorithms to gauge short-term market mood.
@@ -160,6 +174,7 @@ For OpenAI-compatible gateways, you can also set:
 ```bash
 export OPENAI_BASE_URL=...                  # custom gateway URL
 export OPENAI_API_MODE=chat_completions     # optional: force chat/completions
+export OPENAI_FALLBACK_MODELS=...           # optional: comma-separated fallback models
 ```
 
 `OPENAI_API_MODE` supports:
@@ -262,8 +277,8 @@ from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
 config["llm_provider"] = "openai"        # openai, google, anthropic, xai, openrouter, ollama
-config["deep_think_llm"] = "gpt-5.4"     # Model for complex reasoning
-config["quick_think_llm"] = "gpt-5.4-mini" # Model for quick tasks
+config["deep_think_llm"] = "gpt-5.2"      # Model for complex reasoning
+config["quick_think_llm"] = "gpt-5.2"     # Model for quick tasks
 config["max_debate_rounds"] = 2
 
 ta = TradingAgentsGraph(debug=True, config=config)

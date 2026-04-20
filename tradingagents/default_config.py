@@ -32,9 +32,14 @@ DEFAULT_CONFIG = {
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
     # LLM settings
     "llm_provider": "openai",
-    "deep_think_llm": "gpt-5.4",
-    "quick_think_llm": "gpt-5.4-mini",
+    "deep_think_llm": "gpt-5.2",
+    "quick_think_llm": "gpt-5.2",
     "backend_url": None,
+    "tool_execution_mode": None,
+    "llm_retry_attempts": 1,
+    "llm_retry_base_delay": 0.75,
+    "llm_request_min_interval": 0.2,
+    "llm_request_jitter_max": 0.1,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"

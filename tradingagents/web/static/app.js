@@ -1,4 +1,11 @@
 const STAGES = ["分析师团队", "研究团队", "交易团队", "风险管理", "投资组合决策"];
+const STAGE_INDEX = new Map(STAGES.map((stage, index) => [stage, index]));
+const STATUS_PRIORITY = {
+  pending: 0,
+  running: 1,
+  completed: 2,
+  failed: 3,
+};
 
 const state = {
   formOptions: null,
@@ -299,8 +306,29 @@ function setStageStatus(step, status) {
   if (!step) {
     return;
   }
+  const currentStatus = state.stageStatus.get(step) ?? "pending";
+  if ((STATUS_PRIORITY[status] ?? 0) < (STATUS_PRIORITY[currentStatus] ?? 0)) {
+    return;
+  }
   state.stageStatus.set(step, status);
   renderStageProgress();
+}
+
+function completeEarlierRunningStages(currentStep) {
+  const currentIndex = STAGE_INDEX.get(currentStep);
+  if (currentIndex === undefined) {
+    return;
+  }
+
+  for (const stage of STAGES) {
+    const stageIndex = STAGE_INDEX.get(stage);
+    if (stageIndex === undefined || stageIndex >= currentIndex) {
+      continue;
+    }
+    if (state.stageStatus.get(stage) === "running") {
+      setStageStatus(stage, "completed");
+    }
+  }
 }
 
 function appendTimelineEvent(eventName, payload) {
@@ -361,6 +389,7 @@ function handleRunEvent(eventName, payload) {
       break;
     case "step_started":
       updateRunStatus("running", payload.step);
+      completeEarlierRunningStages(payload.step);
       setStageStatus(payload.step, "running");
       break;
     case "step_updated":

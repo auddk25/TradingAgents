@@ -9,6 +9,11 @@ from typing import Dict, Any, Tuple, List, Optional
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.llm_clients import create_llm_client
+from tradingagents.llm_clients.capabilities import (
+    resolve_model_fallback_chain,
+    resolve_tool_execution_mode,
+)
+from tradingagents.llm_clients.resilience import wrap_llm_with_resilience
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG, resolve_provider_base_url
@@ -60,8 +65,19 @@ class TradingAgentsGraph:
             callbacks: Optional list of callback handlers (e.g., for tracking LLM/tool stats)
         """
         self.debug = debug
-        self.config = config or DEFAULT_CONFIG
+        self.config = (config or DEFAULT_CONFIG).copy()
         self.callbacks = callbacks or []
+
+        provider = self.config["llm_provider"]
+        resolved_backend_url = resolve_provider_base_url(
+            provider,
+            self.config.get("backend_url"),
+        )
+        self.config["backend_url"] = resolved_backend_url
+        self.config["tool_execution_mode"] = self.config.get("tool_execution_mode") or resolve_tool_execution_mode(
+            provider,
+            resolved_backend_url,
+        )
 
         # Update the interface's config
         set_config(self.config)
@@ -77,27 +93,46 @@ class TradingAgentsGraph:
         if self.callbacks:
             llm_kwargs["callbacks"] = self.callbacks
 
-        provider = self.config["llm_provider"]
-        resolved_backend_url = resolve_provider_base_url(
-            provider,
-            self.config.get("backend_url"),
-        )
+        gate_key = f"{provider}:{resolved_backend_url or 'default'}"
 
-        deep_client = create_llm_client(
-            provider=provider,
-            model=self.config["deep_think_llm"],
-            base_url=resolved_backend_url,
-            **llm_kwargs,
-        )
-        quick_client = create_llm_client(
-            provider=provider,
-            model=self.config["quick_think_llm"],
-            base_url=resolved_backend_url,
-            **llm_kwargs,
-        )
+        def build_llm(model_name: str):
+            return create_llm_client(
+                provider=provider,
+                model=model_name,
+                base_url=resolved_backend_url,
+                **llm_kwargs,
+            ).get_llm()
 
-        self.deep_thinking_llm = deep_client.get_llm()
-        self.quick_thinking_llm = quick_client.get_llm()
+        self.deep_thinking_llm = wrap_llm_with_resilience(
+            provider=provider,
+            primary_model=self.config["deep_think_llm"],
+            fallback_models=resolve_model_fallback_chain(
+                provider,
+                self.config["deep_think_llm"],
+                resolved_backend_url,
+            ),
+            llm_factory=build_llm,
+            gate_key=gate_key,
+            max_retries=int(self.config.get("llm_retry_attempts", 1)),
+            base_delay=float(self.config.get("llm_retry_base_delay", 0.75)),
+            min_interval=float(self.config.get("llm_request_min_interval", 0.2)),
+            jitter_max=float(self.config.get("llm_request_jitter_max", 0.1)),
+        )
+        self.quick_thinking_llm = wrap_llm_with_resilience(
+            provider=provider,
+            primary_model=self.config["quick_think_llm"],
+            fallback_models=resolve_model_fallback_chain(
+                provider,
+                self.config["quick_think_llm"],
+                resolved_backend_url,
+            ),
+            llm_factory=build_llm,
+            gate_key=gate_key,
+            max_retries=int(self.config.get("llm_retry_attempts", 1)),
+            base_delay=float(self.config.get("llm_retry_base_delay", 0.75)),
+            min_interval=float(self.config.get("llm_request_min_interval", 0.2)),
+            jitter_max=float(self.config.get("llm_request_jitter_max", 0.1)),
+        )
         
         # Initialize memories
         self.bull_memory = FinancialSituationMemory("bull_memory", self.config)

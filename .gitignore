@@ -200,6 +200,8 @@ cython_debug/
 #   and can be added to the global gitignore or merged into this file. However, if you prefer, 
 # Local TradingAgents web run artifacts
 web_runs/
+memory_runs/
+.tradingagents_cache/
 #   you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 

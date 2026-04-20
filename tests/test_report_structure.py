@@ -168,6 +168,9 @@ def test_manager_prompt_contract_requires_future_pricing_and_horizon_split():
     assert "Hold core position" in portfolio_prompt
     assert "Add gradually" in portfolio_prompt
     assert "Wait for better entry" in portfolio_prompt
+    assert "Do not average away disagreement." in portfolio_prompt
+    assert "Choose the side with the stronger evidence and say why." in portfolio_prompt
+    assert "A conditional bullish tactical trade is not the same as a proven long-term ownership case." in portfolio_prompt
 
 
 def test_trader_prompt_contract_focuses_on_tactical_execution_only():
@@ -187,6 +190,45 @@ def test_trader_prompt_contract_focuses_on_tactical_execution_only():
     assert "near-term catalyst watchlist" in prompt_text
     assert "long-term ownership" not in prompt_text.lower()
     assert "prior summary" in prompt_text.lower()
+    assert "Take a view." in prompt_text
+    assert "If the setup is only conditionally attractive, say so explicitly." in prompt_text
+    assert "Do not soften the call into generic balance." in prompt_text
+
+
+def test_debate_prompts_require_high_conviction_and_direct_rebuttals():
+    bull_source = read_repo_file("tradingagents/agents/researchers/bull_researcher.py")
+    bear_source = read_repo_file("tradingagents/agents/researchers/bear_researcher.py")
+    aggressive_source = read_repo_file("tradingagents/agents/risk_mgmt/aggressive_debator.py")
+    conservative_source = read_repo_file("tradingagents/agents/risk_mgmt/conservative_debator.py")
+    neutral_source = read_repo_file("tradingagents/agents/risk_mgmt/neutral_debator.py")
+
+    for source in (bull_source, bear_source):
+        assert "high-conviction PM" in source
+        assert "Attack weak assumptions" in source
+        assert "Do not hedge your stance into neutrality" in source
+
+    assert "missing upside is also a risk" in aggressive_source
+    assert "Push for size when the upside asymmetry is real" in aggressive_source
+    assert "Do not compromise just to sound balanced" in aggressive_source
+
+    assert "capital preservation comes first" in conservative_source
+    assert "Treat drawdown risk as more important than upside regret" in conservative_source
+    assert "Do not soften the downside case" in conservative_source
+
+    assert "Choose the base case with the strongest evidence" in neutral_source
+    assert "Do not split the difference unless the evidence truly supports it" in neutral_source
+
+
+def test_manager_prompts_require_forced_judgment_not_moderation():
+    llm = RecordingLLM()
+    memory = EmptyMemory()
+    state = make_minimal_state()
+
+    create_research_manager(llm, memory)(state)
+    research_prompt = llm.calls[-1]
+    assert "Do not moderate for the sake of harmony." in research_prompt
+    assert "Explicitly say which side of the debate is more convincing" in research_prompt
+    assert "If both sides are weak, say that plainly." in research_prompt
 
 
 def test_fresh_run_state_starts_empty_and_summary_memory_defaults_empty():

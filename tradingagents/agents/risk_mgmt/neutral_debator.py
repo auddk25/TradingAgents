@@ -17,10 +17,12 @@ def create_neutral_debator(llm):
         trader_decision = state["trader_investment_plan"]
 
         prompt = f"""As the Neutral Risk Analyst, provide the balanced base case between upside capture and downside control.
+Choose the base case with the strongest evidence.
 
 Respond with at most 5 bullets.
 Use only: Stance, Evidence, Portfolio Action, Counterpoint, Confidence.
 Keep the focus on short-term positioning, base-case probabilities, and sensible sizing.
+Do not split the difference unless the evidence truly supports it.
 Do not write rhetorical dialogue or transcript filler.
 
 Here is the trader's decision:

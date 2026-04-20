@@ -19,6 +19,9 @@ def create_research_manager(llm, memory):
             "As the research manager and debate facilitator, synthesize the current run into a compact forward-looking investment view.",
             "Treat the current evidence as primary. Do not reuse prior debate transcripts as authority.",
             "If current evidence conflicts with the prior summary, prefer current evidence.",
+            "Do not moderate for the sake of harmony.",
+            "Explicitly say which side of the debate is more convincing and why.",
+            "If both sides are weak, say that plainly.",
         ]
 
         if prior_run_summary:
@@ -64,4 +67,3 @@ def create_research_manager(llm, memory):
         }
 
     return research_manager_node
-

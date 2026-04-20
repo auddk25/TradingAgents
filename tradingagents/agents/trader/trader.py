@@ -41,6 +41,9 @@ def create_trader(llm, memory):
                         "- invalidation\n"
                         "- near-term catalyst watchlist\n\n"
                         "Keep the answer concise and action-oriented. Do not restate the strategic ownership case.\n"
+                        "Take a view.\n"
+                        "If the setup is only conditionally attractive, say so explicitly.\n"
+                        "Do not soften the call into generic balance.\n"
                         "This is a fresh run. If current evidence conflicts with the prior summary, prefer current evidence.",
                         prior_run_summary,
                         "End with a firm decision and always conclude your response with 'FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**'.",

@@ -1,11 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from datetime import datetime, timedelta
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_global_news,
     get_language_instruction,
     get_news,
+    should_use_host_managed_tools,
+    safe_invoke_tool,
+    should_fallback_after_empty_tool_result,
 )
-from tradingagents.dataflows.config import get_config
 
 
 def create_news_analyst(llm):
@@ -57,13 +60,41 @@ Separate fresh information from narratives the market is likely already discount
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
 
-        chain = prompt | llm.bind_tools(tools)
-        result = chain.invoke(state["messages"])
+        use_host_managed_tools = should_use_host_managed_tools()
+        result = None
+        if not use_host_managed_tools:
+            chain = prompt | llm.bind_tools(tools)
+            result = chain.invoke(state["messages"])
 
-        report = ""
+        if use_host_managed_tools or should_fallback_after_empty_tool_result(result):
+            ticker = state["company_of_interest"]
+            start_date = (datetime.strptime(current_date, "%Y-%m-%d") - timedelta(days=7)).date().isoformat()
+            company_news = safe_invoke_tool(
+                get_news,
+                ticker=ticker,
+                start_date=start_date,
+                end_date=current_date,
+            )
+            global_news = safe_invoke_tool(
+                get_global_news,
+                curr_date=current_date,
+                look_back_days=7,
+                limit=5,
+            )
+            fallback_prompt = "\n".join(
+                [
+                    system_message,
+                    f"Current date: {current_date}.",
+                    instrument_context,
+                    "The native tool-calling path returned no tool calls and no content. Fall back to the pre-fetched data below.",
+                    f"Company and sector news:\n{company_news}",
+                    f"Macro news context:\n{global_news}",
+                    "Now write the final compact reasoning card directly.",
+                ]
+            )
+            result = llm.invoke(fallback_prompt)
 
-        if len(result.tool_calls) == 0:
-            report = result.content
+        report = str(getattr(result, "content", "") or "").strip() if len(getattr(result, "tool_calls", []) or []) == 0 else ""
 
         return {
             "messages": [result],

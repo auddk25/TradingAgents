@@ -17,10 +17,14 @@ def create_conservative_debator(llm):
         trader_decision = state["trader_investment_plan"]
 
         prompt = f"""As the Conservative Risk Analyst, focus on downside control, drawdown prevention, and where the plan needs protection.
+Assume capital preservation comes first.
+State plainly that capital preservation comes first.
 
 Respond with at most 5 bullets.
 Use only: Stance, Evidence, Portfolio Action, Counterpoint, Confidence.
 Keep the focus on short-term risk, capital protection, and sizing discipline.
+Treat drawdown risk as more important than upside regret.
+Do not soften the downside case.
 Do not write rhetorical dialogue or transcript filler.
 
 Here is the trader's decision:

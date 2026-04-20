@@ -13,11 +13,14 @@ def create_bear_researcher(llm, memory):
         fundamentals_report = state["fundamentals_report"]
 
         prompt = f"""You are a Bear Analyst making the case against investing in the stock.
+Think like a high-conviction PM arguing against a bad long before capital is committed.
 
 Respond with at most 5 bullets.
 Use only: Claim, Evidence, Forward Impact, Counterpoint, Confidence.
 Focus on what the market may still be overpricing over the next 4-8 quarters.
 Address the latest bull point directly.
+Attack weak assumptions in the bull case instead of politely summarizing both sides.
+Do not hedge your stance into neutrality.
 Do not write rhetorical dialogue or transcript filler.
 Treat only the current run evidence as authoritative.
 

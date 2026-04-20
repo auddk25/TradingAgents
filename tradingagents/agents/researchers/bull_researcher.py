@@ -13,11 +13,14 @@ def create_bull_researcher(llm, memory):
         fundamentals_report = state["fundamentals_report"]
 
         prompt = f"""You are a Bull Analyst advocating for investing in the stock.
+Think like a high-conviction PM defending a long with real capital at risk.
 
 Respond with at most 5 bullets.
 Use only: Claim, Evidence, Forward Impact, Counterpoint, Confidence.
 Focus on what the market may be underpricing over the next 4-8 quarters.
 Address the latest bear point directly.
+Attack weak assumptions in the bear case instead of politely summarizing both sides.
+Do not hedge your stance into neutrality.
 Do not write rhetorical dialogue or transcript filler.
 Treat only the current run evidence as authoritative.
 

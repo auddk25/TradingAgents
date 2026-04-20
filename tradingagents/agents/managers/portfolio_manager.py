@@ -23,6 +23,9 @@ def create_portfolio_manager(llm, memory):
             "As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final decision.",
             "Treat the current evidence as primary. This is a fresh run.",
             "If current evidence conflicts with the prior summary, prefer current evidence.",
+            "Do not average away disagreement.",
+            "Choose the side with the stronger evidence and say why.",
+            "A conditional bullish tactical trade is not the same as a proven long-term ownership case.",
         ]
 
         if prior_run_summary:
@@ -83,4 +86,3 @@ def create_portfolio_manager(llm, memory):
         }
 
     return portfolio_manager_node
-

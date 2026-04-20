@@ -7,8 +7,10 @@ from tradingagents.agents.utils.agent_utils import (
     get_income_statement,
     get_insider_transactions,
     get_language_instruction,
+    should_use_host_managed_tools,
+    safe_invoke_tool,
+    should_fallback_after_empty_tool_result,
 )
-from tradingagents.dataflows.config import get_config
 
 
 def create_fundamentals_analyst(llm):
@@ -65,14 +67,53 @@ Keep the full output under 8 bullets or 180 words. Do not write a backward-looki
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
 
-        chain = prompt | llm.bind_tools(tools)
+        use_host_managed_tools = should_use_host_managed_tools()
+        result = None
+        if not use_host_managed_tools:
+            chain = prompt | llm.bind_tools(tools)
+            result = chain.invoke(state["messages"])
 
-        result = chain.invoke(state["messages"])
+        if use_host_managed_tools or should_fallback_after_empty_tool_result(result):
+            ticker = state["company_of_interest"]
+            fundamentals = safe_invoke_tool(
+                get_fundamentals,
+                ticker=ticker,
+                curr_date=current_date,
+            )
+            balance_sheet = safe_invoke_tool(
+                get_balance_sheet,
+                ticker=ticker,
+                freq="quarterly",
+                curr_date=current_date,
+            )
+            cashflow = safe_invoke_tool(
+                get_cashflow,
+                ticker=ticker,
+                freq="quarterly",
+                curr_date=current_date,
+            )
+            income_statement = safe_invoke_tool(
+                get_income_statement,
+                ticker=ticker,
+                freq="quarterly",
+                curr_date=current_date,
+            )
+            fallback_prompt = "\n".join(
+                [
+                    system_message,
+                    f"Current date: {current_date}.",
+                    instrument_context,
+                    "The native tool-calling path returned no tool calls and no content. Fall back to the pre-fetched data below.",
+                    f"Fundamentals snapshot:\n{fundamentals}",
+                    f"Balance sheet:\n{balance_sheet}",
+                    f"Cash flow:\n{cashflow}",
+                    f"Income statement:\n{income_statement}",
+                    "Now write the final compact reasoning card directly.",
+                ]
+            )
+            result = llm.invoke(fallback_prompt)
 
-        report = ""
-
-        if len(result.tool_calls) == 0:
-            report = result.content
+        report = str(getattr(result, "content", "") or "").strip() if len(getattr(result, "tool_calls", []) or []) == 0 else ""
 
         return {
             "messages": [result],

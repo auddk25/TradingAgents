@@ -82,6 +82,10 @@ FIELD_HELP = {
 class UnsupportedModelError(ValueError):
     pass
 
+
+class TransientModelProbeError(ValueError):
+    pass
+
 MODEL_LABEL_TRANSLATIONS = {
     "Fast, strong coding and tool use": "快速，擅长代码与工具调用",
     "Cheapest, high-volume tasks": "成本最低，适合高频任务",
@@ -242,6 +246,19 @@ def _raise_probe_failure(field_label: str, model: str, detail: str) -> None:
         reason = "API 密钥无效或未配置"
     elif "timeout" in detail_lower:
         reason = "运行前探测超时"
+    elif (
+        "502" in detail_lower
+        or "503" in detail_lower
+        or "internal_server_error" in detail_lower
+        or "unknown provider" in detail_lower
+        or "rate limit" in detail_lower
+        or "temporarily unavailable" in detail_lower
+    ):
+        reason = "运行前探测遇到瞬时网关错误"
+        raise TransientModelProbeError(
+            f"模型探测警告：{model}。{reason}，将交给运行时容错继续处理。"
+            f"\n{field_label}原始错误：{normalized_detail}"
+        )
     else:
         reason = "运行前探测失败"
 
@@ -338,7 +355,10 @@ def preflight_validate_submission(payload: SubmissionPayload) -> None:
         if normalized_model in checked_models:
             continue
         checked_models.add(normalized_model)
-        probe_runtime_model_availability(payload, normalized_model, field_label)
+        try:
+            probe_runtime_model_availability(payload, normalized_model, field_label)
+        except TransientModelProbeError as exc:
+            print(f"[preflight-warning] {exc}")
 
 
 def build_form_options() -> FormOptionsResponse:
@@ -381,9 +401,9 @@ def build_form_options() -> FormOptionsResponse:
         "research_depth": 1,
         "llm_provider": "openai",
         "backend_url": get_provider_base_url("openai"),
-        "main_model": "gpt-5.4",
-        "quick_think_llm": "gpt-5.4",
-        "deep_think_llm": "gpt-5.4",
+        "main_model": "gpt-5.2",
+        "quick_think_llm": "gpt-5.2",
+        "deep_think_llm": "gpt-5.2",
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
         "anthropic_effort": "high",
