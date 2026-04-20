@@ -54,21 +54,23 @@
                 <select id="output_language" name="output_language"></select>
               </label>
 
-              <label class="field">
-                <span class="field-label field-help">
-                  <span class="field-label-text">研究深度</span>
-                  <button
-                    type="button"
-                    class="field-help-trigger"
-                    data-help-for="research_depth"
-                    aria-controls="research_depth_help"
-                    aria-expanded="false"
-                    aria-label="查看研究深度说明"
-                  >?</button>
-                </span>
+              <div class="field">
+                <div class="field-heading">
+                  <label for="research_depth" class="field-label-text">研究深度</label>
+                  <div class="field-help">
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="research_depth"
+                      aria-controls="research_depth_help"
+                      aria-expanded="false"
+                      aria-label="查看研究深度说明"
+                    >?</button>
+                    <p class="field-help-popover" id="research_depth_help" hidden></p>
+                  </div>
+                </div>
                 <select id="research_depth" name="research_depth"></select>
-                <p class="field-help-popover" id="research_depth_help" hidden></p>
-              </label>
+              </div>
             </div>
 
             <fieldset class="field fieldset">
@@ -97,17 +99,20 @@
 
             <div class="form-grid">
               <div class="field" data-model-field="main">
-                <span class="field-label field-help">
-                  <span class="field-label-text">主模型</span>
-                  <button
-                    type="button"
-                    class="field-help-trigger"
-                    data-help-for="main_model"
-                    aria-controls="main_model_help"
-                    aria-expanded="false"
-                    aria-label="查看主模型说明"
-                  >?</button>
-                </span>
+                <div class="field-heading">
+                  <label for="main_model" class="field-label-text">主模型</label>
+                  <div class="field-help">
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="main_model"
+                      aria-controls="main_model_help"
+                      aria-expanded="false"
+                      aria-label="查看主模型说明"
+                    >?</button>
+                    <p class="field-help-popover" id="main_model_help" hidden></p>
+                  </div>
+                </div>
                 <select id="main_model" name="main_model"></select>
                 <input
                   id="main_model_custom"
@@ -117,7 +122,7 @@
                   placeholder="请输入模型 ID"
                   hidden
                 />
-                <p class="field-help-popover" id="main_model_help" hidden></p>
+                <p class="help model-mode-hint" id="main_model_mode_hint"></p>
               </div>
             </div>
 
@@ -129,17 +134,20 @@
 
               <div class="form-grid">
                 <div class="field" data-model-field="quick">
-                  <span class="field-label field-help">
-                    <span class="field-label-text">快速思考模型</span>
-                    <button
-                      type="button"
-                      class="field-help-trigger"
-                      data-help-for="quick_think_llm"
-                      aria-controls="quick_think_llm_help"
-                      aria-expanded="false"
-                      aria-label="查看快速思考模型说明"
-                    >?</button>
-                  </span>
+                  <div class="field-heading">
+                    <label for="quick_think_llm" class="field-label-text">快速思考模型</label>
+                    <div class="field-help">
+                      <button
+                        type="button"
+                        class="field-help-trigger"
+                        data-help-for="quick_think_llm"
+                        aria-controls="quick_think_llm_help"
+                        aria-expanded="false"
+                        aria-label="查看快速思考模型说明"
+                      >?</button>
+                      <p class="field-help-popover" id="quick_think_llm_help" hidden></p>
+                    </div>
+                  </div>
                   <select id="quick_think_llm" name="quick_think_llm"></select>
                   <input
                     id="quick_think_llm_custom"
@@ -149,21 +157,24 @@
                     placeholder="请输入模型 ID"
                     hidden
                   />
-                  <p class="field-help-popover" id="quick_think_llm_help" hidden></p>
+                  <p class="help model-mode-hint" id="quick_think_llm_mode_hint"></p>
                 </div>
 
                 <div class="field" data-model-field="deep">
-                  <span class="field-label field-help">
-                    <span class="field-label-text">深度思考模型</span>
-                    <button
-                      type="button"
-                      class="field-help-trigger"
-                      data-help-for="deep_think_llm"
-                      aria-controls="deep_think_llm_help"
-                      aria-expanded="false"
-                      aria-label="查看深度思考模型说明"
-                    >?</button>
-                  </span>
+                  <div class="field-heading">
+                    <label for="deep_think_llm" class="field-label-text">深度思考模型</label>
+                    <div class="field-help">
+                      <button
+                        type="button"
+                        class="field-help-trigger"
+                        data-help-for="deep_think_llm"
+                        aria-controls="deep_think_llm_help"
+                        aria-expanded="false"
+                        aria-label="查看深度思考模型说明"
+                      >?</button>
+                      <p class="field-help-popover" id="deep_think_llm_help" hidden></p>
+                    </div>
+                  </div>
                   <select id="deep_think_llm" name="deep_think_llm"></select>
                   <input
                     id="deep_think_llm_custom"
@@ -173,58 +184,64 @@
                     placeholder="请输入模型 ID"
                     hidden
                   />
-                  <p class="field-help-popover" id="deep_think_llm_help" hidden></p>
+                  <p class="help model-mode-hint" id="deep_think_llm_mode_hint"></p>
                 </div>
               </div>
 
               <div class="form-grid">
-                <label class="field" data-provider-field="google">
-                  <span class="field-label field-help">
-                    <span class="field-label-text">Google 思考强度</span>
-                    <button
-                      type="button"
-                      class="field-help-trigger"
-                      data-help-for="google_thinking_level"
-                      aria-controls="google_thinking_level_help"
-                      aria-expanded="false"
-                      aria-label="查看 Google 思考强度说明"
-                    >?</button>
-                  </span>
+                <div class="field" data-provider-field="google">
+                  <div class="field-heading">
+                    <label for="google_thinking_level" class="field-label-text">Google 思考强度</label>
+                    <div class="field-help">
+                      <button
+                        type="button"
+                        class="field-help-trigger"
+                        data-help-for="google_thinking_level"
+                        aria-controls="google_thinking_level_help"
+                        aria-expanded="false"
+                        aria-label="查看 Google 思考强度说明"
+                      >?</button>
+                      <p class="field-help-popover" id="google_thinking_level_help" hidden></p>
+                    </div>
+                  </div>
                   <select id="google_thinking_level" name="google_thinking_level"></select>
-                  <p class="field-help-popover" id="google_thinking_level_help" hidden></p>
-                </label>
+                </div>
 
-                <label class="field" data-provider-field="openai">
-                  <span class="field-label field-help">
-                    <span class="field-label-text">OpenAI 推理强度</span>
-                    <button
-                      type="button"
-                      class="field-help-trigger"
-                      data-help-for="openai_reasoning_effort"
-                      aria-controls="openai_reasoning_effort_help"
-                      aria-expanded="false"
-                      aria-label="查看 OpenAI 推理强度说明"
-                    >?</button>
-                  </span>
+                <div class="field" data-provider-field="openai">
+                  <div class="field-heading">
+                    <label for="openai_reasoning_effort" class="field-label-text">OpenAI 推理强度</label>
+                    <div class="field-help">
+                      <button
+                        type="button"
+                        class="field-help-trigger"
+                        data-help-for="openai_reasoning_effort"
+                        aria-controls="openai_reasoning_effort_help"
+                        aria-expanded="false"
+                        aria-label="查看 OpenAI 推理强度说明"
+                      >?</button>
+                      <p class="field-help-popover" id="openai_reasoning_effort_help" hidden></p>
+                    </div>
+                  </div>
                   <select id="openai_reasoning_effort" name="openai_reasoning_effort"></select>
-                  <p class="field-help-popover" id="openai_reasoning_effort_help" hidden></p>
-                </label>
+                </div>
 
-                <label class="field" data-provider-field="anthropic">
-                  <span class="field-label field-help">
-                    <span class="field-label-text">Anthropic 思考强度</span>
-                    <button
-                      type="button"
-                      class="field-help-trigger"
-                      data-help-for="anthropic_effort"
-                      aria-controls="anthropic_effort_help"
-                      aria-expanded="false"
-                      aria-label="查看 Anthropic 思考强度说明"
-                    >?</button>
-                  </span>
+                <div class="field" data-provider-field="anthropic">
+                  <div class="field-heading">
+                    <label for="anthropic_effort" class="field-label-text">Anthropic 思考强度</label>
+                    <div class="field-help">
+                      <button
+                        type="button"
+                        class="field-help-trigger"
+                        data-help-for="anthropic_effort"
+                        aria-controls="anthropic_effort_help"
+                        aria-expanded="false"
+                        aria-label="查看 Anthropic 思考强度说明"
+                      >?</button>
+                      <p class="field-help-popover" id="anthropic_effort_help" hidden></p>
+                    </div>
+                  </div>
                   <select id="anthropic_effort" name="anthropic_effort"></select>
-                  <p class="field-help-popover" id="anthropic_effort_help" hidden></p>
-                </label>
+                </div>
               </div>
             </details>
 

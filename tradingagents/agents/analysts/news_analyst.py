@@ -30,7 +30,8 @@ Return exactly these sections:
 5. Key Risk
 6. Confidence
 
-Separate fresh information from narratives the market is likely already discounting. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative."""
+Separate fresh information from narratives the market is likely already discounting. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative.""" 
+            + """Write this as a compact reasoning card rather than a long essay."""
             + get_language_instruction()
         )
 

@@ -56,6 +56,16 @@ function closeAllHelpPopovers() {
   }
 }
 
+function setHelpPopoverVisibility(trigger, visible) {
+  const targetId = trigger.dataset.helpFor;
+  const popover = $(targetId ? `${targetId}_help` : "");
+  if (!popover || !popover.textContent.trim()) {
+    return;
+  }
+  popover.hidden = !visible;
+  trigger.setAttribute("aria-expanded", visible ? "true" : "false");
+}
+
 function normalizeOptionsPayload(payload) {
   const defaults = payload?.defaults ?? {};
   const options = payload?.options ?? payload ?? {};
@@ -150,6 +160,12 @@ function modelElementIds(mode) {
         : mode === "quick"
           ? el.quickHelp
           : el.deepHelp,
+    modeHint:
+      mode === "main"
+        ? el.mainModeHint
+        : mode === "quick"
+          ? el.quickModeHint
+          : el.deepModeHint,
     field:
       mode === "main"
         ? el.mainField
@@ -169,6 +185,7 @@ function setModelField(mode, provider, selectedValue) {
     ids.select.hidden = true;
     ids.custom.hidden = false;
     ids.custom.value = selectedValue ?? "";
+    ids.modeHint.textContent = "当前提供方需要手动输入模型 ID。";
     ids.field.dataset.mode = "input";
     return;
   }
@@ -176,6 +193,7 @@ function setModelField(mode, provider, selectedValue) {
   populateSelect(ids.select, options, selectedValue);
   ids.select.hidden = false;
   ids.custom.hidden = true;
+  ids.modeHint.textContent = "从后端提供的模型选项中选择。";
   ids.field.dataset.mode = "select";
 }
 
@@ -457,7 +475,7 @@ async function loadFormOptions() {
   );
 
   populateSelect(
-    el.mainModel,
+    el.mainSelect,
     asArray(options.model_options?.[defaults.llm_provider ?? "openai"]?.main).map((option) =>
       createOptionItem(optionLabel(option), String(optionValue(option) ?? ""))
     ),
@@ -573,23 +591,29 @@ function wireEvents() {
       event.preventDefault();
       event.stopPropagation();
 
-      const targetId = trigger.dataset.helpFor;
-      const popover = $(targetId ? `${targetId}_help` : "");
-      if (!popover || !popover.textContent.trim()) {
-        return;
-      }
-
       const isOpen = trigger.getAttribute("aria-expanded") === "true";
       closeAllHelpPopovers();
       if (!isOpen) {
-        popover.hidden = false;
-        trigger.setAttribute("aria-expanded", "true");
+        setHelpPopoverVisibility(trigger, true);
       }
+    });
+
+    trigger.addEventListener("mouseenter", () => {
+      closeAllHelpPopovers();
+      setHelpPopoverVisibility(trigger, true);
+    });
+
+    trigger.addEventListener("focus", () => {
+      closeAllHelpPopovers();
+      setHelpPopoverVisibility(trigger, true);
     });
   }
 
   document.addEventListener("click", (event) => {
-    if (event.target instanceof Element && event.target.closest(".field-help")) {
+    if (
+      event.target instanceof Element &&
+      (event.target.closest(".field-help") || event.target.closest(".field-help-popover"))
+    ) {
       return;
     }
     closeAllHelpPopovers();
@@ -599,6 +623,22 @@ function wireEvents() {
     if (event.key === "Escape") {
       closeAllHelpPopovers();
     }
+  });
+
+  document.addEventListener("pointerover", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    if (event.target.closest(".field-help")) {
+      return;
+    }
+
+    if (event.target.closest(".field-help-popover")) {
+      return;
+    }
+
+    closeAllHelpPopovers();
   });
 }
 
@@ -625,14 +665,17 @@ function cacheElements() {
   el.mainSelect = $("main_model");
   el.mainCustom = $("main_model_custom");
   el.mainHelp = $("main_model_help");
+  el.mainModeHint = $("main_model_mode_hint");
   el.mainField = document.querySelector('[data-model-field="main"]');
   el.quickSelect = $("quick_think_llm");
   el.quickCustom = $("quick_think_llm_custom");
   el.quickHelp = $("quick_think_llm_help");
+  el.quickModeHint = $("quick_think_llm_mode_hint");
   el.quickField = document.querySelector('[data-model-field="quick"]');
   el.deepSelect = $("deep_think_llm");
   el.deepCustom = $("deep_think_llm_custom");
   el.deepHelp = $("deep_think_llm_help");
+  el.deepModeHint = $("deep_think_llm_mode_hint");
   el.deepField = document.querySelector('[data-model-field="deep"]');
   el.googleThinkingLevel = $("google_thinking_level");
   el.openaiReasoningEffort = $("openai_reasoning_effort");

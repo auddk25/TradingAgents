@@ -223,6 +223,16 @@ Run artifacts include:
 - `complete_report.md` on success
 - `error.md` on failure
 
+Run-completion SSE payloads stay path-first: the browser reads `report_path` and `error_path` from the event stream, while the full markdown and traceback content remain on disk in `web_runs/`.
+
+If you want a compact carry-forward summary for later review, the local runner also keeps ticker-scoped memory files here:
+```text
+memory_runs/<ticker>/
+  latest_summary.md
+  summaries/<timestamp>.md
+  snapshots/<timestamp>.json
+```
+
 ## TradingAgents Package
 
 ### Implementation Details

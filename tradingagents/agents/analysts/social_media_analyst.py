@@ -24,7 +24,8 @@ Return exactly these sections:
 5. Key Risk
 6. Confidence
 
-Separate durable positioning signals from attention noise and crowd narrative. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative."""
+Separate durable positioning signals from attention noise and crowd narrative. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative.""" 
+            + """Write this as a compact reasoning card rather than a long essay."""
             + get_language_instruction()
         )
 

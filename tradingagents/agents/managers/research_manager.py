@@ -1,5 +1,8 @@
-
-from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_language_instruction,
+)
+from tradingagents.agents.utils.summary_memory import build_reference_summary_block
 
 
 def create_research_manager(llm, memory):
@@ -10,49 +13,49 @@ def create_research_manager(llm, memory):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        prior_run_summary = build_reference_summary_block(state.get("prior_run_summary", ""))
 
-        investment_debate_state = state["investment_debate_state"]
+        prompt_parts = [
+            "As the research manager and debate facilitator, synthesize the current run into a compact forward-looking investment view.",
+            "Treat the current evidence as primary. Do not reuse prior debate transcripts as authority.",
+            "If current evidence conflicts with the prior summary, prefer current evidence.",
+        ]
 
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
+        if prior_run_summary:
+            prompt_parts.append(prior_run_summary)
 
-        past_memory_str = ""
-        for i, rec in enumerate(past_memories, 1):
-            past_memory_str += rec["recommendation"] + "\n\n"
+        prompt_parts.extend(
+            [
+                "Required output:",
+                "1. Future Business Path",
+                "2. What The Market Is Pricing",
+                "3. What Could Beat Expectations",
+                "4. What Could Miss Expectations",
+                "5. Strategic Ownership View",
+                "",
+                "Rules:",
+                "- Separate the next 4-8 quarter path from the long-term ownership case.",
+                "- Focus on what is priced in versus what the business can still deliver.",
+                "- Keep the answer concise and structured for a downstream trader.",
+                "",
+                f"Current market evidence:\n- Market report: {market_research_report}\n- Sentiment report: {sentiment_report}\n- News report: {news_report}\n- Fundamentals report: {fundamentals_report}",
+                f"Debate history:\n{history}",
+                f"{instrument_context}",
+            ]
+        )
 
-        prompt = f"""As the research manager and debate facilitator, synthesize the debate into a compact forward-looking investment view.
+        prompt = "\n".join(part for part in prompt_parts if part)
+        prompt += get_language_instruction()
 
-Be decisive. Focus on what the market is pricing today, the most likely 4-8 quarter business path, and the mismatch between the two. Avoid long narrative recap.
-
-Required output:
-1. Recommendation
-2. Future Business Path
-3. What The Market Is Pricing
-4. What Could Beat Expectations
-5. What Could Miss Expectations
-6. Strategic Ownership View
-7. Key Evidence
-
-Keep the answer concise and structured for a downstream trader.
-Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving.
-
-Here are your past reflections on mistakes:
-\"{past_memory_str}\"
-
-{instrument_context}
-
-Here is the debate:
-Debate History:
-{history}"""
         response = llm.invoke(prompt)
 
         new_investment_debate_state = {
             "judge_decision": response.content,
-            "history": investment_debate_state.get("history", ""),
-            "bear_history": investment_debate_state.get("bear_history", ""),
-            "bull_history": investment_debate_state.get("bull_history", ""),
+            "history": state["investment_debate_state"].get("history", ""),
+            "bear_history": state["investment_debate_state"].get("bear_history", ""),
+            "bull_history": state["investment_debate_state"].get("bull_history", ""),
             "current_response": response.content,
-            "count": investment_debate_state["count"],
+            "count": state["investment_debate_state"]["count"],
         }
 
         return {
@@ -61,3 +64,4 @@ Debate History:
         }
 
     return research_manager_node
+

@@ -668,17 +668,11 @@ def save_report_to_disk(final_state, ticker: str, save_path: Path):
     if final_state.get("investment_debate_state"):
         research_dir = save_path / "2_research"
         debate = final_state["investment_debate_state"]
-        if debate.get("bull_history"):
-            research_dir.mkdir(exist_ok=True)
-            (research_dir / "bull.md").write_text(debate["bull_history"], encoding="utf-8")
-        if debate.get("bear_history"):
-            research_dir.mkdir(exist_ok=True)
-            (research_dir / "bear.md").write_text(debate["bear_history"], encoding="utf-8")
         if debate.get("judge_decision"):
             research_dir.mkdir(exist_ok=True)
             (research_dir / "manager.md").write_text(debate["judge_decision"], encoding="utf-8")
             sections.append(
-                f"## II. Research View\n\n### Research Manager\n{debate['judge_decision']}"
+                f"## II. Research Manager Decision\n\n### Research Manager\n{debate['judge_decision']}"
             )
 
     # 3. Trading
@@ -692,23 +686,11 @@ def save_report_to_disk(final_state, ticker: str, save_path: Path):
     if final_state.get("risk_debate_state"):
         risk_dir = save_path / "4_risk"
         risk = final_state["risk_debate_state"]
-        if risk.get("aggressive_history"):
-            risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "aggressive.md").write_text(risk["aggressive_history"], encoding="utf-8")
-        if risk.get("conservative_history"):
-            risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "conservative.md").write_text(risk["conservative_history"], encoding="utf-8")
-        if risk.get("neutral_history"):
-            risk_dir.mkdir(exist_ok=True)
-            (risk_dir / "neutral.md").write_text(risk["neutral_history"], encoding="utf-8")
-
-        # 5. Portfolio Manager
         if risk.get("judge_decision"):
-            portfolio_dir = save_path / "5_portfolio"
-            portfolio_dir.mkdir(exist_ok=True)
-            (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
+            risk_dir.mkdir(exist_ok=True)
+            (risk_dir / "portfolio_manager.md").write_text(risk["judge_decision"], encoding="utf-8")
             sections.append(
-                f"## IV. Final Portfolio Decision\n\n### Portfolio Manager\n{risk['judge_decision']}"
+                f"## IV. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}"
             )
 
     # Write consolidated report
@@ -741,7 +723,7 @@ def display_complete_report(final_state):
     if final_state.get("investment_debate_state"):
         debate = final_state["investment_debate_state"]
         if debate.get("judge_decision"):
-            console.print(Panel("[bold]II. Research View[/bold]", border_style="magenta"))
+            console.print(Panel("[bold]II. Research Manager Decision[/bold]", border_style="magenta"))
             console.print(
                 Panel(
                     Markdown(debate["judge_decision"]),
@@ -760,7 +742,7 @@ def display_complete_report(final_state):
     if final_state.get("risk_debate_state"):
         risk = final_state["risk_debate_state"]
         if risk.get("judge_decision"):
-            console.print(Panel("[bold]IV. Final Portfolio Decision[/bold]", border_style="green"))
+            console.print(Panel("[bold]IV. Portfolio Manager Decision[/bold]", border_style="green"))
             console.print(Panel(Markdown(risk["judge_decision"]), title="Portfolio Manager", border_style="blue", padding=(1, 2)))
 
 
@@ -1020,7 +1002,7 @@ def run_analysis():
         update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
 
         # Initialize state and get graph args with callbacks
-        init_agent_state = graph.propagator.create_initial_state(
+        init_agent_state = graph.prepare_initial_state(
             selections["ticker"], selections["analysis_date"]
         )
         # Pass callbacks to graph config for tool execution tracking
@@ -1151,6 +1133,7 @@ def run_analysis():
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
 
     # Prompt to save report
+    report_file = None
     save_choice = typer.prompt("Save report?", default="Y").strip().upper()
     if save_choice in ("Y", "YES", ""):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1166,6 +1149,13 @@ def run_analysis():
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
+
+    graph.persist_run_summary(
+        selections["ticker"],
+        selections["analysis_date"],
+        final_state,
+        report_path=str(report_file) if report_file else None,
+    )
 
     # Prompt to display full report
     display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()

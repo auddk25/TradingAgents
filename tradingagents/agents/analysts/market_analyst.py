@@ -54,7 +54,8 @@ Return exactly these sections:
 5. Key Risk
 6. Confidence
 
-Focus on the current market regime, what traders appear to be pricing right now, and the highest-signal implication for the next few weeks. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative."""
+Focus on the current market regime, what traders appear to be pricing right now, and the highest-signal implication for the next few weeks. Keep the full output under 8 bullets or 180 words. Do not add a Markdown table or long narrative.""" 
+            + """Write this as a compact reasoning card rather than a long essay."""
             + get_language_instruction()
         )
 

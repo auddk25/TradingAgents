@@ -13,6 +13,7 @@ from tradingagents.llm_clients import create_llm_client
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG, resolve_provider_base_url
 from tradingagents.agents.utils.memory import FinancialSituationMemory
+from tradingagents.agents.utils.summary_memory import build_run_summary, load_latest_summary, persist_summary_memory
 from tradingagents.agents.utils.agent_states import (
     AgentState,
     InvestDebateState,
@@ -195,15 +196,60 @@ class TradingAgentsGraph:
             ),
         }
 
+    def reset_run_memory(self) -> None:
+        """Clear run-local memory so every analysis starts fresh."""
+        for memory in (
+            self.bull_memory,
+            self.bear_memory,
+            self.trader_memory,
+            self.invest_judge_memory,
+            self.portfolio_manager_memory,
+        ):
+            memory.reset_for_run()
+
+    def _load_prior_run_summary(self, ticker: str) -> str:
+        """Load the carry-forward summary for a ticker, if one exists."""
+        return load_latest_summary(ticker)
+
+    def prepare_initial_state(self, company_name: str, trade_date: str) -> Dict[str, Any]:
+        """Build a fresh run state and attach the optional prior summary."""
+        self.reset_run_memory()
+        init_agent_state = self.propagator.create_initial_state(company_name, trade_date)
+        init_agent_state["prior_run_summary"] = self._load_prior_run_summary(company_name)
+        return init_agent_state
+
+    def persist_run_summary(
+        self,
+        ticker: str,
+        trade_date: str,
+        final_state: Dict[str, Any],
+        *,
+        run_id: str | None = None,
+        report_path: str | None = None,
+        error_path: str | None = None,
+    ) -> Dict[str, Path]:
+        """Persist the new carry-forward summary after a completed run."""
+        summary_text = build_run_summary(final_state)
+        metadata = {
+            "run_id": run_id or f"{ticker}_{trade_date}",
+            "analysis_date": str(trade_date),
+            "provider": self.config.get("llm_provider"),
+            "model_selection": {
+                "quick_think_llm": self.config.get("quick_think_llm"),
+                "deep_think_llm": self.config.get("deep_think_llm"),
+            },
+            "report_path": report_path,
+            "error_path": error_path,
+        }
+        return persist_summary_memory(ticker, summary_text, metadata=metadata)
+
     def propagate(self, company_name, trade_date):
         """Run the trading agents graph for a company on a specific date."""
 
         self.ticker = company_name
 
         # Initialize state
-        init_agent_state = self.propagator.create_initial_state(
-            company_name, trade_date
-        )
+        init_agent_state = self.prepare_initial_state(company_name, trade_date)
         args = self.propagator.get_graph_args()
 
         if self.debug:
@@ -223,6 +269,7 @@ class TradingAgentsGraph:
 
         # Store current state for reflection
         self.curr_state = final_state
+        self.persist_run_summary(company_name, str(trade_date), final_state)
 
         # Log state
         self._log_state(trade_date, final_state)

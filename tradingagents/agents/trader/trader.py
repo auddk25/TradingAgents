@@ -1,6 +1,7 @@
 import functools
 
 from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.agents.utils.summary_memory import build_reference_summary_block
 
 
 def create_trader(llm, memory):
@@ -12,34 +13,40 @@ def create_trader(llm, memory):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
-
-        curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
-        past_memories = memory.get_memories(curr_situation, n_matches=2)
-
-        past_memory_str = ""
-        if past_memories:
-            for i, rec in enumerate(past_memories, 1):
-                past_memory_str += rec["recommendation"] + "\n\n"
-        else:
-            past_memory_str = "No past memories found."
+        prior_run_summary = build_reference_summary_block(state.get("prior_run_summary", ""))
 
         context = {
             "role": "user",
-            "content": f"Based on a comprehensive analysis by a team of analysts, here is an investment plan tailored for {company_name}. {instrument_context} This plan incorporates insights from current technical market trends, macroeconomic indicators, and social media sentiment. Use this plan as a foundation for evaluating your next trading decision.\n\nProposed Investment Plan: {investment_plan}\n\nLeverage these insights to make an informed and strategic decision.",
+            "content": (
+                f"Based on a compact investment plan for {company_name}, {instrument_context} "
+                "Use the plan as a tactical input.\n\n"
+                f"Proposed Investment Plan: {investment_plan}\n\n"
+                f"Market report: {market_research_report}\n"
+                f"Sentiment report: {sentiment_report}\n"
+                f"News report: {news_report}\n"
+                f"Fundamentals report: {fundamentals_report}"
+            ),
         }
 
         messages = [
             {
                 "role": "system",
-                "content": f"""You are a trading agent focused on tactical execution.
-
-Output only:
-- tactical direction
-- entry style
-- invalidation
-- near-term catalyst watchlist
-
-Keep the answer concise and action-oriented. Do not restate the strategic ownership case. End with a firm decision and always conclude your response with 'FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**'. Apply lessons from past decisions to strengthen your analysis. Here are reflections from similar situations you traded in and the lessons learned: {past_memory_str}""",
+                "content": "\n".join(
+                    part
+                    for part in [
+                        "You are a trading agent focused on tactical execution.\n\n"
+                        "Output only:\n"
+                        "- tactical direction\n"
+                        "- entry style\n"
+                        "- invalidation\n"
+                        "- near-term catalyst watchlist\n\n"
+                        "Keep the answer concise and action-oriented. Do not restate the strategic ownership case.\n"
+                        "This is a fresh run. If current evidence conflicts with the prior summary, prefer current evidence.",
+                        prior_run_summary,
+                        "End with a firm decision and always conclude your response with 'FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**'.",
+                    ]
+                    if part
+                ),
             },
             context,
         ]

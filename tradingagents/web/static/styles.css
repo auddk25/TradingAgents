@@ -178,12 +178,26 @@ h1 {
   gap: 8px;
 }
 
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .field-label-text {
   min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: var(--text);
 }
 
 .field-help {
   position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .field-help-trigger {

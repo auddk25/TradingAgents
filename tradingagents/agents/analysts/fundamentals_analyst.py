@@ -38,8 +38,9 @@ Return exactly these sections:
 5. Key Risk
 6. Confidence
 
-Keep the full output under 8 bullets or 180 words. Do not write a backward-looking narrative dump or add a Markdown table."""
-            + get_language_instruction(),
+Keep the full output under 8 bullets or 180 words. Do not write a backward-looking narrative dump or add a Markdown table.""" 
+            + """Write this as a compact reasoning card rather than a long essay."""
+            + get_language_instruction()
         )
 
         prompt = ChatPromptTemplate.from_messages(

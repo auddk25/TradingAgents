@@ -70,7 +70,7 @@ def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response
         "llm_provider": "openai",
         "backend_url": get_provider_base_url("openai"),
         "quick_think_llm": "gpt-5.4",
-        "deep_think_llm": get_model_options("openai", "deep")[0][1],
+        "deep_think_llm": "gpt-5.4",
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
         "anthropic_effort": "high",
@@ -178,8 +178,20 @@ def test_root_page_is_localized_in_chinese(client: TestClient):
     assert 'data-help-for="main_model"' in response.text
     assert "查看研究深度说明" in response.text
     assert "查看主模型说明" in response.text
+    assert '<label for="research_depth" class="field-label-text">研究深度</label>' in response.text
+    assert '<label for="main_model" class="field-label-text">主模型</label>' in response.text
+    assert 'id="main_model_mode_hint"' in response.text
+    assert 'id="quick_think_llm_mode_hint"' in response.text
+    assert 'id="deep_think_llm_mode_hint"' in response.text
     assert "Markdown 结果" not in response.text
     assert "错误详情" not in response.text
+
+
+def test_frontend_script_uses_bound_main_model_element_name():
+    source = Path("tradingagents/web/static/app.js").read_text(encoding="utf-8")
+
+    assert "el.mainSelect" in source
+    assert "el.mainModel" not in source
 
 
 def test_submission_persists_normalized_payload_in_repo_local_web_runs_dir(

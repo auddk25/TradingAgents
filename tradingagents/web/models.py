@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 from cli.models import AnalystType
 from cli.utils import ANALYST_ORDER
 from tradingagents.default_config import get_provider_base_url, resolve_provider_base_url
-from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS, get_model_options
+from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
 from tradingagents.llm_clients.validators import validate_model
 
 SUPPORTED_PROVIDERS = (
@@ -383,7 +383,7 @@ def build_form_options() -> FormOptionsResponse:
         "backend_url": get_provider_base_url("openai"),
         "main_model": "gpt-5.4",
         "quick_think_llm": "gpt-5.4",
-        "deep_think_llm": get_model_options("openai", "deep")[0][1],
+        "deep_think_llm": "gpt-5.4",
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
         "anthropic_effort": "high",
