@@ -174,6 +174,10 @@ def test_root_page_is_localized_in_chinese(client: TestClient):
     assert "高级选项" in response.text
     assert "结果文件路径" in response.text
     assert "错误文件路径" in response.text
+    assert 'data-help-for="research_depth"' in response.text
+    assert 'data-help-for="main_model"' in response.text
+    assert "查看研究深度说明" in response.text
+    assert "查看主模型说明" in response.text
     assert "Markdown 结果" not in response.text
     assert "错误详情" not in response.text
 

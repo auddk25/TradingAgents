@@ -44,6 +44,18 @@ function optionLabel(option) {
   return String(option);
 }
 
+function closeAllHelpPopovers() {
+  for (const trigger of el.helpTriggers) {
+    const targetId = trigger.dataset.helpFor;
+    const popover = $(targetId ? `${targetId}_help` : "");
+    if (!popover) {
+      continue;
+    }
+    popover.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  }
+}
+
 function normalizeOptionsPayload(payload) {
   const defaults = payload?.defaults ?? {};
   const options = payload?.options ?? payload ?? {};
@@ -157,9 +169,6 @@ function setModelField(mode, provider, selectedValue) {
     ids.select.hidden = true;
     ids.custom.hidden = false;
     ids.custom.value = selectedValue ?? "";
-    ids.help.textContent = options.length
-      ? "当前提供方需要手动输入模型 ID。"
-      : "请输入后端期望接收的模型 ID。";
     ids.field.dataset.mode = "input";
     return;
   }
@@ -167,7 +176,6 @@ function setModelField(mode, provider, selectedValue) {
   populateSelect(ids.select, options, selectedValue);
   ids.select.hidden = false;
   ids.custom.hidden = true;
-  ids.help.textContent = "从后端提供的模型选项中选择。";
   ids.field.dataset.mode = "select";
 }
 
@@ -559,6 +567,39 @@ function wireEvents() {
       setLoading(false);
     }
   });
+
+  for (const trigger of el.helpTriggers) {
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const targetId = trigger.dataset.helpFor;
+      const popover = $(targetId ? `${targetId}_help` : "");
+      if (!popover || !popover.textContent.trim()) {
+        return;
+      }
+
+      const isOpen = trigger.getAttribute("aria-expanded") === "true";
+      closeAllHelpPopovers();
+      if (!isOpen) {
+        popover.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+      }
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest(".field-help")) {
+      return;
+    }
+    closeAllHelpPopovers();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAllHelpPopovers();
+    }
+  });
 }
 
 function cacheElements() {
@@ -606,6 +647,7 @@ function cacheElements() {
   el.responseErrorPath = $("response-error-path");
   el.responseErrorHint = $("response-error-hint");
   el.errorCard = $("error-card");
+  el.helpTriggers = Array.from(document.querySelectorAll(".field-help-trigger"));
 }
 
 function populateStaticChoices() {
@@ -640,13 +682,28 @@ function populateStaticChoices() {
 }
 
 function applyFieldHelp(fieldHelp) {
-  el.researchDepthHelp.textContent = fieldHelp.research_depth ?? "";
-  el.mainHelp.textContent = fieldHelp.main_model ?? "";
-  el.quickHelp.textContent = fieldHelp.quick_think_llm ?? "";
-  el.deepHelp.textContent = fieldHelp.deep_think_llm ?? "";
-  el.googleThinkingLevelHelp.textContent = fieldHelp.google_thinking_level ?? "";
-  el.openaiReasoningEffortHelp.textContent = fieldHelp.openai_reasoning_effort ?? "";
-  el.anthropicEffortHelp.textContent = fieldHelp.anthropic_effort ?? "";
+  const helpMap = {
+    research_depth: el.researchDepthHelp,
+    main_model: el.mainHelp,
+    quick_think_llm: el.quickHelp,
+    deep_think_llm: el.deepHelp,
+    google_thinking_level: el.googleThinkingLevelHelp,
+    openai_reasoning_effort: el.openaiReasoningEffortHelp,
+    anthropic_effort: el.anthropicEffortHelp,
+  };
+
+  for (const [fieldName, target] of Object.entries(helpMap)) {
+    const text = fieldHelp[fieldName] ?? "";
+    target.textContent = text;
+    target.hidden = true;
+  }
+
+  for (const trigger of el.helpTriggers) {
+    const fieldName = trigger.dataset.helpFor;
+    const hasText = Boolean(fieldName && (fieldHelp[fieldName] ?? "").trim());
+    trigger.hidden = !hasText;
+    trigger.setAttribute("aria-expanded", "false");
+  }
 }
 
 async function main() {

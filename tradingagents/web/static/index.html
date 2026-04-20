@@ -40,24 +40,34 @@
           <form id="submission-form" class="form" novalidate>
             <div class="form-grid">
               <label class="field">
-                <span>股票代码</span>
+                <span class="field-label-text">股票代码</span>
                 <input id="ticker" name="ticker" type="text" autocomplete="off" spellcheck="false" />
               </label>
 
               <label class="field">
-                <span>分析日期</span>
+                <span class="field-label-text">分析日期</span>
                 <input id="analysis_date" name="analysis_date" type="date" />
               </label>
 
               <label class="field">
-                <span>输出语言</span>
+                <span class="field-label-text">输出语言</span>
                 <select id="output_language" name="output_language"></select>
               </label>
 
               <label class="field">
-                <span>研究深度</span>
+                <span class="field-label field-help">
+                  <span class="field-label-text">研究深度</span>
+                  <button
+                    type="button"
+                    class="field-help-trigger"
+                    data-help-for="research_depth"
+                    aria-controls="research_depth_help"
+                    aria-expanded="false"
+                    aria-label="查看研究深度说明"
+                  >?</button>
+                </span>
                 <select id="research_depth" name="research_depth"></select>
-                <p class="help" id="research_depth_help"></p>
+                <p class="field-help-popover" id="research_depth_help" hidden></p>
               </label>
             </div>
 
@@ -70,12 +80,12 @@
 
             <div class="form-grid">
               <label class="field">
-                <span>模型提供方</span>
+                <span class="field-label-text">模型提供方</span>
                 <select id="llm_provider" name="llm_provider"></select>
               </label>
 
               <label class="field">
-                <span>后端网关地址</span>
+                <span class="field-label-text">后端网关地址</span>
                 <input
                   id="backend_url"
                   name="backend_url"
@@ -87,7 +97,17 @@
 
             <div class="form-grid">
               <div class="field" data-model-field="main">
-                <span>主模型</span>
+                <span class="field-label field-help">
+                  <span class="field-label-text">主模型</span>
+                  <button
+                    type="button"
+                    class="field-help-trigger"
+                    data-help-for="main_model"
+                    aria-controls="main_model_help"
+                    aria-expanded="false"
+                    aria-label="查看主模型说明"
+                  >?</button>
+                </span>
                 <select id="main_model" name="main_model"></select>
                 <input
                   id="main_model_custom"
@@ -97,7 +117,7 @@
                   placeholder="请输入模型 ID"
                   hidden
                 />
-                <p class="help" id="main_model_help"></p>
+                <p class="field-help-popover" id="main_model_help" hidden></p>
               </div>
             </div>
 
@@ -109,7 +129,17 @@
 
               <div class="form-grid">
                 <div class="field" data-model-field="quick">
-                  <span>快速思考模型</span>
+                  <span class="field-label field-help">
+                    <span class="field-label-text">快速思考模型</span>
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="quick_think_llm"
+                      aria-controls="quick_think_llm_help"
+                      aria-expanded="false"
+                      aria-label="查看快速思考模型说明"
+                    >?</button>
+                  </span>
                   <select id="quick_think_llm" name="quick_think_llm"></select>
                   <input
                     id="quick_think_llm_custom"
@@ -119,11 +149,21 @@
                     placeholder="请输入模型 ID"
                     hidden
                   />
-                  <p class="help" id="quick_think_llm_help"></p>
+                  <p class="field-help-popover" id="quick_think_llm_help" hidden></p>
                 </div>
 
                 <div class="field" data-model-field="deep">
-                  <span>深度思考模型</span>
+                  <span class="field-label field-help">
+                    <span class="field-label-text">深度思考模型</span>
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="deep_think_llm"
+                      aria-controls="deep_think_llm_help"
+                      aria-expanded="false"
+                      aria-label="查看深度思考模型说明"
+                    >?</button>
+                  </span>
                   <select id="deep_think_llm" name="deep_think_llm"></select>
                   <input
                     id="deep_think_llm_custom"
@@ -133,27 +173,57 @@
                     placeholder="请输入模型 ID"
                     hidden
                   />
-                  <p class="help" id="deep_think_llm_help"></p>
+                  <p class="field-help-popover" id="deep_think_llm_help" hidden></p>
                 </div>
               </div>
 
               <div class="form-grid">
                 <label class="field" data-provider-field="google">
-                  <span>Google 思考强度</span>
+                  <span class="field-label field-help">
+                    <span class="field-label-text">Google 思考强度</span>
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="google_thinking_level"
+                      aria-controls="google_thinking_level_help"
+                      aria-expanded="false"
+                      aria-label="查看 Google 思考强度说明"
+                    >?</button>
+                  </span>
                   <select id="google_thinking_level" name="google_thinking_level"></select>
-                  <p class="help" id="google_thinking_level_help"></p>
+                  <p class="field-help-popover" id="google_thinking_level_help" hidden></p>
                 </label>
 
                 <label class="field" data-provider-field="openai">
-                  <span>OpenAI 推理强度</span>
+                  <span class="field-label field-help">
+                    <span class="field-label-text">OpenAI 推理强度</span>
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="openai_reasoning_effort"
+                      aria-controls="openai_reasoning_effort_help"
+                      aria-expanded="false"
+                      aria-label="查看 OpenAI 推理强度说明"
+                    >?</button>
+                  </span>
                   <select id="openai_reasoning_effort" name="openai_reasoning_effort"></select>
-                  <p class="help" id="openai_reasoning_effort_help"></p>
+                  <p class="field-help-popover" id="openai_reasoning_effort_help" hidden></p>
                 </label>
 
                 <label class="field" data-provider-field="anthropic">
-                  <span>Anthropic 思考强度</span>
+                  <span class="field-label field-help">
+                    <span class="field-label-text">Anthropic 思考强度</span>
+                    <button
+                      type="button"
+                      class="field-help-trigger"
+                      data-help-for="anthropic_effort"
+                      aria-controls="anthropic_effort_help"
+                      aria-expanded="false"
+                      aria-label="查看 Anthropic 思考强度说明"
+                    >?</button>
+                  </span>
                   <select id="anthropic_effort" name="anthropic_effort"></select>
-                  <p class="help" id="anthropic_effort_help"></p>
+                  <p class="field-help-popover" id="anthropic_effort_help" hidden></p>
                 </label>
               </div>
             </details>
