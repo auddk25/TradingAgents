@@ -474,7 +474,7 @@ def test_run_creation_allows_transient_probe_failure_to_reach_runtime_resilience
             return RunRecord(
                 run_id="run123",
                 status="queued",
-                run_dir="E:\\code\\TradingAgents\\repo\\web_runs\\dummy",
+                run_dir="web_runs/dummy",
             )
 
     def fake_probe(payload, model, field_label):
