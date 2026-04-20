@@ -4,6 +4,7 @@ from typing import Any, Optional
 from langchain_openai import ChatOpenAI
 
 from .base_client import BaseLLMClient, normalize_content
+from tradingagents.default_config import get_provider_base_url
 from .validators import validate_model
 
 
@@ -24,15 +25,36 @@ _PASSTHROUGH_KWARGS = (
     "api_key", "callbacks", "http_client", "http_async_client",
 )
 
-# Provider base URLs and API key env vars
+# Provider API key env vars
 _PROVIDER_CONFIG = {
-    "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
-    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY"),
-    "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "DASHSCOPE_API_KEY"),
-    "glm": ("https://api.z.ai/api/paas/v4/", "ZHIPU_API_KEY"),
-    "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
-    "ollama": ("http://localhost:11434/v1", None),
+    "xai": "XAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "qwen": "DASHSCOPE_API_KEY",
+    "glm": "ZHIPU_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "ollama": None,
 }
+
+_OFFICIAL_OPENAI_BASE_URL = "https://api.openai.com/v1"
+_RESPONSES_API_MODE = "responses"
+_CHAT_COMPLETIONS_API_MODE = "chat_completions"
+
+
+def _normalize_base_url(base_url: Optional[str]) -> Optional[str]:
+    if not base_url:
+        return None
+    return base_url.rstrip("/")
+
+
+def _resolve_openai_api_mode(base_url: Optional[str]) -> str:
+    override = os.getenv("OPENAI_API_MODE", "").strip().lower()
+    if override in (_RESPONSES_API_MODE, _CHAT_COMPLETIONS_API_MODE):
+        return override
+
+    if _normalize_base_url(base_url) == _normalize_base_url(_OFFICIAL_OPENAI_BASE_URL):
+        return _RESPONSES_API_MODE
+
+    return _CHAT_COMPLETIONS_API_MODE
 
 
 class OpenAIClient(BaseLLMClient):
@@ -58,11 +80,13 @@ class OpenAIClient(BaseLLMClient):
         """Return configured ChatOpenAI instance."""
         self.warn_if_unknown_model()
         llm_kwargs = {"model": self.model}
+        resolved_base_url = self.base_url
 
         # Provider-specific base URL and auth
         if self.provider in _PROVIDER_CONFIG:
-            base_url, api_key_env = _PROVIDER_CONFIG[self.provider]
-            llm_kwargs["base_url"] = base_url
+            resolved_base_url = self.base_url or get_provider_base_url(self.provider)
+            llm_kwargs["base_url"] = resolved_base_url
+            api_key_env = _PROVIDER_CONFIG[self.provider]
             if api_key_env:
                 api_key = os.environ.get(api_key_env)
                 if api_key:
@@ -80,7 +104,9 @@ class OpenAIClient(BaseLLMClient):
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.
         if self.provider == "openai":
-            llm_kwargs["use_responses_api"] = True
+            llm_kwargs["use_responses_api"] = (
+                _resolve_openai_api_mode(resolved_base_url) == _RESPONSES_API_MODE
+            )
 
         return NormalizedChatOpenAI(**llm_kwargs)
 

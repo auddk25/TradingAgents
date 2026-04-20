@@ -4,6 +4,7 @@ from typing import Any, Optional
 from langchain_openai import AzureChatOpenAI
 
 from .base_client import BaseLLMClient, normalize_content
+from tradingagents.default_config import get_provider_base_url
 from .validators import validate_model
 
 _PASSTHROUGH_KWARGS = (
@@ -40,6 +41,10 @@ class AzureOpenAIClient(BaseLLMClient):
             "model": self.model,
             "azure_deployment": os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", self.model),
         }
+
+        azure_endpoint = self.base_url or get_provider_base_url("azure")
+        if azure_endpoint:
+            llm_kwargs["azure_endpoint"] = azure_endpoint
 
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:

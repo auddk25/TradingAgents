@@ -156,6 +156,20 @@ Alternatively, copy `.env.example` to `.env` and fill in your keys:
 cp .env.example .env
 ```
 
+For OpenAI-compatible gateways, you can also set:
+```bash
+export OPENAI_BASE_URL=...                  # custom gateway URL
+export OPENAI_API_MODE=chat_completions     # optional: force chat/completions
+```
+
+`OPENAI_API_MODE` supports:
+- `responses`: force the OpenAI Responses API
+- `chat_completions`: force Chat Completions
+
+When `OPENAI_API_MODE` is unset, TradingAgents uses:
+- `responses` for the official OpenAI base URL
+- `chat_completions` for custom `OPENAI_BASE_URL` gateways
+
 ### CLI Usage
 
 Launch the interactive CLI:
@@ -178,6 +192,36 @@ An interface will appear showing results as they load, letting you track the age
 <p align="center">
   <img src="assets/cli/cli_transaction.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
+
+### Local Web MVP
+
+For a local single-user web console, start the web app:
+```bash
+tradingagents-web
+# or
+python -m tradingagents.web.app
+```
+
+Then open:
+```text
+http://127.0.0.1:8000
+```
+
+The page loads the CLI-equivalent form options from the backend, starts a real TradingAgents run with `POST /api/runs`, and streams live progress through `SSE` from `GET /api/runs/{run_id}/events`.
+
+Each run is saved under the repository working directory:
+```text
+web_runs/<ticker>/<analysis_date>/<timestamp>_<run_id>/
+```
+
+Run artifacts include:
+- `input.json`
+- `events.log`
+- `stdout.log`
+- `stderr.log`
+- `partials/*.md`
+- `complete_report.md` on success
+- `error.md` on failure
 
 ## TradingAgents Package
 

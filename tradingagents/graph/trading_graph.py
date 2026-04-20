@@ -11,7 +11,7 @@ from langgraph.prebuilt import ToolNode
 from tradingagents.llm_clients import create_llm_client
 
 from tradingagents.agents import *
-from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.default_config import DEFAULT_CONFIG, resolve_provider_base_url
 from tradingagents.agents.utils.memory import FinancialSituationMemory
 from tradingagents.agents.utils.agent_states import (
     AgentState,
@@ -76,16 +76,22 @@ class TradingAgentsGraph:
         if self.callbacks:
             llm_kwargs["callbacks"] = self.callbacks
 
+        provider = self.config["llm_provider"]
+        resolved_backend_url = resolve_provider_base_url(
+            provider,
+            self.config.get("backend_url"),
+        )
+
         deep_client = create_llm_client(
-            provider=self.config["llm_provider"],
+            provider=provider,
             model=self.config["deep_think_llm"],
-            base_url=self.config.get("backend_url"),
+            base_url=resolved_backend_url,
             **llm_kwargs,
         )
         quick_client = create_llm_client(
-            provider=self.config["llm_provider"],
+            provider=provider,
             model=self.config["quick_think_llm"],
-            base_url=self.config.get("backend_url"),
+            base_url=resolved_backend_url,
             **llm_kwargs,
         )
 

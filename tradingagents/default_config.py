@@ -2,6 +2,30 @@ import os
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
 
+_PROVIDER_BASE_URLS = {
+    "openai": ("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+    "google": ("GOOGLE_BASE_URL", None),
+    "anthropic": ("ANTHROPIC_BASE_URL", "https://api.anthropic.com/"),
+    "xai": ("XAI_BASE_URL", "https://api.x.ai/v1"),
+    "deepseek": ("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+    "qwen": ("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+    "glm": ("GLM_BASE_URL", "https://api.z.ai/api/paas/v4/"),
+    "openrouter": ("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+    "azure": ("AZURE_OPENAI_ENDPOINT", None),
+    "ollama": ("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+}
+
+
+def get_provider_base_url(provider: str):
+    env_key, default = _PROVIDER_BASE_URLS[provider.lower()]
+    return os.getenv(env_key, default)
+
+
+def resolve_provider_base_url(provider: str, configured_base_url=None):
+    if configured_base_url:
+        return configured_base_url
+    return get_provider_base_url(provider)
+
 DEFAULT_CONFIG = {
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
@@ -10,7 +34,7 @@ DEFAULT_CONFIG = {
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.4",
     "quick_think_llm": "gpt-5.4-mini",
-    "backend_url": "https://api.openai.com/v1",
+    "backend_url": None,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"
