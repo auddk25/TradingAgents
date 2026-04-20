@@ -14,7 +14,7 @@ from typing import Any, Literal
 from cli.main import save_report_to_disk
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.web.models import RunEvent, RunRecord, SubmissionPayload, new_submission_id
+from tradingagents.web.models import RunEvent, RunRecord, SubmissionPayload, preflight_validate_submission, new_submission_id
 from tradingagents.web.storage import create_run_dir, write_json_file
 
 RUNS: dict[str, "WebRun"] = {}
@@ -202,7 +202,9 @@ class WebRun:
         self.event_queue.put(None)
 
 
-def start_run(payload: SubmissionPayload) -> WebRun:
+def start_run(payload: SubmissionPayload, *, skip_preflight: bool = False) -> WebRun:
+    if not skip_preflight:
+        preflight_validate_submission(payload)
     run = WebRun.create(payload)
     RUNS[run.run_id] = run
     thread = threading.Thread(target=_run_job_wrapper, args=(run,), daemon=True)

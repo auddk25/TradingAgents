@@ -13,12 +13,21 @@ from tradingagents.default_config import get_provider_base_url
 from tradingagents.llm_clients.model_catalog import get_model_options
 from tradingagents.web.app import app
 from tradingagents.web import runner as web_runner
+from tradingagents.web.models import UnsupportedModelError
 
 
 @pytest.fixture
 def client() -> TestClient:
     web_runner.RUNS.clear()
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def bypass_runtime_model_probe(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "tradingagents.web.models.probe_runtime_model_availability",
+        lambda payload, model, field_label: None,
+    )
 
 
 @pytest.fixture
@@ -49,7 +58,7 @@ def form_options_response(client: TestClient):
 def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response):
     payload = form_options_response
 
-    assert set(payload) == {"defaults", "options"}
+    assert set(payload) == {"defaults", "options", "field_help"}
 
     defaults = payload["defaults"]
     assert defaults == {
@@ -60,11 +69,12 @@ def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response
         "research_depth": 1,
         "llm_provider": "openai",
         "backend_url": get_provider_base_url("openai"),
-        "quick_think_llm": get_model_options("openai", "quick")[0][1],
+        "quick_think_llm": "gpt-5.4",
         "deep_think_llm": get_model_options("openai", "deep")[0][1],
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
         "anthropic_effort": "high",
+        "main_model": "gpt-5.4",
     }
 
     options = payload["options"]
@@ -134,6 +144,15 @@ def test_form_options_exposes_cli_equivalents_and_defaults(form_options_response
         {"label": "中等", "value": "medium"},
         {"label": "低", "value": "low"},
     ]
+    assert payload["field_help"] == {
+        "research_depth": "控制研究团队和风险团队的讨论轮次，不是模型能力等级。",
+        "main_model": "默认给整条链路使用。未展开高级选项时，快速模型和深度模型都跟随它。",
+        "quick_think_llm": "给分析师、交易员、风险辩手等高频节点使用。",
+        "deep_think_llm": "给研究经理和投资组合经理等最终裁决节点使用。",
+        "google_thinking_level": "控制 Google 系列模型的单次思考预算。",
+        "openai_reasoning_effort": "控制 OpenAI 推理调用的推理强度，不等于研究轮次。",
+        "anthropic_effort": "控制 Anthropic 推理调用的思考强度，不等于研究轮次。",
+    }
     assert options["model_options"]["openai"]["quick"][0]["label"].startswith("GPT-5.4 Mini - ")
     assert "快速" in options["model_options"]["openai"]["quick"][0]["label"]
     assert options["model_options"]["openrouter"]["quick"] == [
@@ -151,7 +170,12 @@ def test_root_page_is_localized_in_chinese(client: TestClient):
     assert "本地参数提交面板" in response.text
     assert "提交参数" in response.text
     assert "运行状态" in response.text
-    assert "Markdown 结果" in response.text
+    assert "主模型" in response.text
+    assert "高级选项" in response.text
+    assert "结果文件路径" in response.text
+    assert "错误文件路径" in response.text
+    assert "Markdown 结果" not in response.text
+    assert "错误详情" not in response.text
 
 
 def test_submission_persists_normalized_payload_in_repo_local_web_runs_dir(
@@ -310,6 +334,50 @@ def test_failed_run_persists_error_logs_and_partials(
     assert stderr_text.startswith("boom line\n")
     assert "RuntimeError: simulated failure" in stderr_text
     assert (run_dir / "partials" / "news_report.md").is_file()
+
+
+def test_run_creation_rejects_invalid_model_name_before_background_start(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, sample_payload: dict
+):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("start_run should not be called for invalid models")
+
+    monkeypatch.setattr(web_runner, "start_run", fail_if_called)
+
+    payload = dict(sample_payload)
+    payload["quick_think_llm"] = "model_not_found"
+
+    response = client.post("/api/runs", json=payload)
+
+    assert response.status_code == 400
+    assert "模型不可用" in response.text
+    assert "model_not_found" in response.text
+    assert web_runner.RUNS == {}
+
+
+def test_run_creation_rejects_gateway_unavailable_model_before_background_start(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, sample_payload: dict
+):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("start_run should not be called for gateway-unavailable models")
+
+    def fake_probe(payload, model, field_label):
+        raise UnsupportedModelError(
+            f"模型不可用：{model}。当前网关不支持这个模型，请改用 gpt-5.4 或检查网关配置。"
+        )
+
+    monkeypatch.setattr(web_runner, "start_run", fail_if_called)
+    monkeypatch.setattr("tradingagents.web.models.probe_runtime_model_availability", fake_probe)
+
+    payload = dict(sample_payload)
+    payload["backend_url"] = "https://gateway.example/v1"
+
+    response = client.post("/api/runs", json=payload)
+
+    assert response.status_code == 400
+    assert "gpt-5.4-mini" in response.text
+    assert "当前网关不支持这个模型" in response.text
+    assert web_runner.RUNS == {}
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,7 @@ def create_portfolio_manager(llm, memory):
         for i, rec in enumerate(past_memories, 1):
             past_memory_str += rec["recommendation"] + "\n\n"
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final decision.
 
 {instrument_context}
 
@@ -31,8 +31,8 @@ def create_portfolio_manager(llm, memory):
 **Rating Scale** (use exactly one):
 - **Buy**: Strong conviction to enter or add to position
 - **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
+- **Hold**: Maintain current position
+- **Underweight**: Reduce exposure or take partial profits
 - **Sell**: Exit position or avoid entry
 
 **Context:**
@@ -42,8 +42,12 @@ def create_portfolio_manager(llm, memory):
 
 **Required Output Structure:**
 1. **Rating**: State one of Buy / Overweight / Hold / Underweight / Sell.
-2. **Executive Summary**: A concise action plan covering entry strategy, position sizing, key risk levels, and time horizon.
-3. **Investment Thesis**: Detailed reasoning anchored in the analysts' debate and past reflections.
+2. **Short-Term View**: Tactical action for the next days to weeks.
+3. **Long-Term Ownership View**: Whether the business should be owned through a 4-8 quarter path.
+4. **What The Market Is Pricing**: The operating path or sentiment embedded in the current price.
+5. **Gap Between Price And Future Path**: Where price and the likely business path diverge.
+6. **Portfolio Action**: Choose exactly one of Exit fully / Trim position / Hold core position / Add gradually / Wait for better entry.
+7. **Risk Triggers**: What would make you change the view.
 
 ---
 
@@ -52,7 +56,7 @@ def create_portfolio_manager(llm, memory):
 
 ---
 
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+Be concise, decisive, and separate tactical action from ownership view. Ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
 
         response = llm.invoke(prompt)
 

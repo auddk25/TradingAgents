@@ -57,6 +57,7 @@
               <label class="field">
                 <span>研究深度</span>
                 <select id="research_depth" name="research_depth"></select>
+                <p class="help" id="research_depth_help"></p>
               </label>
             </div>
 
@@ -85,51 +86,77 @@
             </div>
 
             <div class="form-grid">
-              <div class="field" data-model-field="quick">
-                <span>快速思考模型</span>
-                <select id="quick_think_llm" name="quick_think_llm"></select>
+              <div class="field" data-model-field="main">
+                <span>主模型</span>
+                <select id="main_model" name="main_model"></select>
                 <input
-                  id="quick_think_llm_custom"
-                  name="quick_think_llm_custom"
+                  id="main_model_custom"
+                  name="main_model_custom"
                   type="text"
                   spellcheck="false"
                   placeholder="请输入模型 ID"
                   hidden
                 />
-                <p class="help" data-model-help="quick"></p>
-              </div>
-
-              <div class="field" data-model-field="deep">
-                <span>深度思考模型</span>
-                <select id="deep_think_llm" name="deep_think_llm"></select>
-                <input
-                  id="deep_think_llm_custom"
-                  name="deep_think_llm_custom"
-                  type="text"
-                  spellcheck="false"
-                  placeholder="请输入模型 ID"
-                  hidden
-                />
-                <p class="help" data-model-help="deep"></p>
+                <p class="help" id="main_model_help"></p>
               </div>
             </div>
 
-            <div class="form-grid">
-              <label class="field" data-provider-field="google">
-                <span>Google 思考强度</span>
-                <select id="google_thinking_level" name="google_thinking_level"></select>
-              </label>
+            <details class="advanced-panel">
+              <summary>高级选项</summary>
+              <p class="muted advanced-panel__lede">
+                仅在你需要分别控制快速模型、深度模型或提供方推理参数时展开。
+              </p>
 
-              <label class="field" data-provider-field="openai">
-                <span>OpenAI 推理强度</span>
-                <select id="openai_reasoning_effort" name="openai_reasoning_effort"></select>
-              </label>
+              <div class="form-grid">
+                <div class="field" data-model-field="quick">
+                  <span>快速思考模型</span>
+                  <select id="quick_think_llm" name="quick_think_llm"></select>
+                  <input
+                    id="quick_think_llm_custom"
+                    name="quick_think_llm_custom"
+                    type="text"
+                    spellcheck="false"
+                    placeholder="请输入模型 ID"
+                    hidden
+                  />
+                  <p class="help" id="quick_think_llm_help"></p>
+                </div>
 
-              <label class="field" data-provider-field="anthropic">
-                <span>Anthropic 思考强度</span>
-                <select id="anthropic_effort" name="anthropic_effort"></select>
-              </label>
-            </div>
+                <div class="field" data-model-field="deep">
+                  <span>深度思考模型</span>
+                  <select id="deep_think_llm" name="deep_think_llm"></select>
+                  <input
+                    id="deep_think_llm_custom"
+                    name="deep_think_llm_custom"
+                    type="text"
+                    spellcheck="false"
+                    placeholder="请输入模型 ID"
+                    hidden
+                  />
+                  <p class="help" id="deep_think_llm_help"></p>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <label class="field" data-provider-field="google">
+                  <span>Google 思考强度</span>
+                  <select id="google_thinking_level" name="google_thinking_level"></select>
+                  <p class="help" id="google_thinking_level_help"></p>
+                </label>
+
+                <label class="field" data-provider-field="openai">
+                  <span>OpenAI 推理强度</span>
+                  <select id="openai_reasoning_effort" name="openai_reasoning_effort"></select>
+                  <p class="help" id="openai_reasoning_effort_help"></p>
+                </label>
+
+                <label class="field" data-provider-field="anthropic">
+                  <span>Anthropic 思考强度</span>
+                  <select id="anthropic_effort" name="anthropic_effort"></select>
+                  <p class="help" id="anthropic_effort_help"></p>
+                </label>
+              </div>
+            </details>
 
             <div class="actions">
               <button id="submit-button" type="submit">提交参数</button>
@@ -144,7 +171,7 @@
           <div class="card__header">
             <div>
               <h2>运行状态</h2>
-              <p class="muted">提交成功后，这里会实时显示阶段进度、事件流、落盘路径和最终 Markdown 结果。</p>
+              <p class="muted">提交成功后，这里会实时显示阶段进度、事件流，以及结果和错误文件路径。</p>
             </div>
           </div>
 
@@ -170,10 +197,6 @@
                 <dt>运行目录</dt>
                 <dd><code id="response-saved-path">-</code></dd>
               </div>
-              <div>
-                <dt>报告路径</dt>
-                <dd><code id="response-report-path">-</code></dd>
-              </div>
             </dl>
 
             <div class="progress-rail">
@@ -186,14 +209,18 @@
               <ol id="event-timeline" class="event-timeline"></ol>
             </div>
 
-            <div class="result-block">
-              <h3>Markdown 结果</h3>
-              <pre id="response-payload" class="code-block markdown-block"></pre>
+            <div class="path-card">
+              <h3>结果文件路径</h3>
+              <p class="muted">完整结果不再内嵌显示，打开本地文件查看。</p>
+              <code id="response-report-path" class="path-card__path">-</code>
+              <p id="response-result-hint" class="help"></p>
             </div>
 
-            <div class="error-block" id="error-block" hidden>
-              <h3>错误详情</h3>
-              <pre id="error-details" class="code-block error-details"></pre>
+            <div class="path-card path-card--error" id="error-card" hidden>
+              <h3>错误文件路径</h3>
+              <p class="muted">完整错误内容只写入本地文件，不在页面内联展开。</p>
+              <code id="response-error-path" class="path-card__path">-</code>
+              <p id="response-error-hint" class="help"></p>
             </div>
           </div>
         </section>

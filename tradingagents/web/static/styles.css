@@ -237,6 +237,29 @@ h1 {
   color: var(--muted);
 }
 
+.advanced-panel {
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(31, 41, 55, 0.12);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.advanced-panel > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.advanced-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-panel__lede {
+  margin: 8px 0 12px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -316,8 +339,7 @@ h1 {
 
 .progress-rail,
 .timeline-block,
-.result-block,
-.error-block {
+.path-card {
   display: grid;
   gap: 8px;
 }
@@ -412,25 +434,26 @@ h1 {
   color: var(--muted);
 }
 
-.code-block {
-  margin: 0;
+.path-card {
   padding: 12px;
-  overflow: auto;
   border-radius: var(--radius-lg);
+  border: 1px solid rgba(31, 41, 55, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.path-card--error {
+  border-color: rgba(185, 28, 28, 0.22);
+  background: rgba(185, 28, 28, 0.05);
+}
+
+.path-card__path {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
   background: #0f172a;
   color: #e2e8f0;
-  font: 0.92rem/1.6 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  white-space: pre-wrap;
+  font: 0.9rem/1.4 "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   word-break: break-word;
-}
-
-.markdown-block {
-  min-height: 220px;
-}
-
-.error-details {
-  border: 1px solid rgba(185, 28, 28, 0.28);
-  background: #2a1414;
 }
 
 .card[data-status="error"] .muted {

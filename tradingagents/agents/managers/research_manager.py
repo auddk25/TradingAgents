@@ -20,16 +20,21 @@ def create_research_manager(llm, memory):
         for i, rec in enumerate(past_memories, 1):
             past_memory_str += rec["recommendation"] + "\n\n"
 
-        prompt = f"""As the portfolio manager and debate facilitator, your role is to critically evaluate this round of debate and make a definitive decision: align with the bear analyst, the bull analyst, or choose Hold only if it is strongly justified based on the arguments presented.
+        prompt = f"""As the research manager and debate facilitator, synthesize the debate into a compact forward-looking investment view.
 
-Summarize the key points from both sides concisely, focusing on the most compelling evidence or reasoning. Your recommendation—Buy, Sell, or Hold—must be clear and actionable. Avoid defaulting to Hold simply because both sides have valid points; commit to a stance grounded in the debate's strongest arguments.
+Be decisive. Focus on what the market is pricing today, the most likely 4-8 quarter business path, and the mismatch between the two. Avoid long narrative recap.
 
-Additionally, develop a detailed investment plan for the trader. This should include:
+Required output:
+1. Recommendation
+2. Future Business Path
+3. What The Market Is Pricing
+4. What Could Beat Expectations
+5. What Could Miss Expectations
+6. Strategic Ownership View
+7. Key Evidence
 
-Your Recommendation: A decisive stance supported by the most convincing arguments.
-Rationale: An explanation of why these arguments lead to your conclusion.
-Strategic Actions: Concrete steps for implementing the recommendation.
-Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving. Present your analysis conversationally, as if speaking naturally, without special formatting. 
+Keep the answer concise and structured for a downstream trader.
+Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving.
 
 Here are your past reflections on mistakes:
 \"{past_memory_str}\"

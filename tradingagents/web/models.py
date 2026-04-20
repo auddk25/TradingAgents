@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import Any, Literal
 from uuid import uuid4
 
+from openai import AzureOpenAI, OpenAI
+from openai import APIError, APIStatusError
 from pydantic import BaseModel, Field, field_validator
 
 from cli.models import AnalystType
 from cli.utils import ANALYST_ORDER
-from tradingagents.default_config import get_provider_base_url
+from tradingagents.default_config import get_provider_base_url, resolve_provider_base_url
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS, get_model_options
+from tradingagents.llm_clients.validators import validate_model
 
 SUPPORTED_PROVIDERS = (
     "openai",
@@ -64,6 +68,20 @@ ANALYST_LABELS = {
     "fundamentals": "基本面分析师",
 }
 
+FIELD_HELP = {
+    "research_depth": "控制研究团队和风险团队的讨论轮次，不是模型能力等级。",
+    "main_model": "默认给整条链路使用。未展开高级选项时，快速模型和深度模型都跟随它。",
+    "quick_think_llm": "给分析师、交易员、风险辩手等高频节点使用。",
+    "deep_think_llm": "给研究经理和投资组合经理等最终裁决节点使用。",
+    "google_thinking_level": "控制 Google 系列模型的单次思考预算。",
+    "openai_reasoning_effort": "控制 OpenAI 推理调用的推理强度，不等于研究轮次。",
+    "anthropic_effort": "控制 Anthropic 推理调用的思考强度，不等于研究轮次。",
+}
+
+
+class UnsupportedModelError(ValueError):
+    pass
+
 MODEL_LABEL_TRANSLATIONS = {
     "Fast, strong coding and tool use": "快速，擅长代码与工具调用",
     "Cheapest, high-volume tasks": "成本最低，适合高频任务",
@@ -90,6 +108,28 @@ MODEL_LABEL_TRANSLATIONS = {
     "Custom model ID": "自定义模型 ID",
     "Custom deployment name": "自定义部署名称",
 }
+
+_OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai",
+    "xai",
+    "deepseek",
+    "qwen",
+    "glm",
+    "openrouter",
+    "ollama",
+}
+
+_PROVIDER_API_KEY_ENVS = {
+    "openai": "OPENAI_API_KEY",
+    "xai": "XAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "qwen": "DASHSCOPE_API_KEY",
+    "glm": "ZHIPU_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+_RUNTIME_PROBE_TIMEOUT = 20.0
+_RUNTIME_PROBE_PROMPT = [{"role": "user", "content": "Reply with OK."}]
 
 
 def translate_model_label(label: str) -> str:
@@ -167,6 +207,138 @@ class RunRecord(BaseModel):
 class FormOptionsResponse(BaseModel):
     defaults: dict
     options: dict
+    field_help: dict[str, str]
+
+
+def _build_main_model_options(provider: str, model_options: dict) -> list[dict[str, str]]:
+    main_options: list[dict[str, str]] = []
+    seen_values: set[str] = set()
+
+    for mode in ("quick", "deep"):
+        for option in model_options.get(mode, []):
+            value = str(option.get("value", ""))
+            if value in seen_values:
+                continue
+            seen_values.add(value)
+            main_options.append(option)
+
+    return main_options
+
+
+def _read_provider_api_key(provider: str) -> str | None:
+    env_key = _PROVIDER_API_KEY_ENVS.get(provider.lower())
+    if env_key is None:
+        return None
+    return os.getenv(env_key)
+
+
+def _raise_probe_failure(field_label: str, model: str, detail: str) -> None:
+    normalized_detail = detail.strip()
+    detail_lower = normalized_detail.lower()
+
+    if "model_not_found" in detail_lower or "no available distributor" in detail_lower:
+        reason = "当前网关不支持这个模型"
+    elif "api key" in detail_lower or "unauthorized" in detail_lower or "authentication" in detail_lower:
+        reason = "API 密钥无效或未配置"
+    elif "timeout" in detail_lower:
+        reason = "运行前探测超时"
+    else:
+        reason = "运行前探测失败"
+
+    raise UnsupportedModelError(
+        f"模型不可用：{model}。{reason}，请改用其他模型或检查当前提供方配置。"
+        f"\n{field_label}原始错误：{normalized_detail}"
+    )
+
+
+def _probe_openai_compatible_runtime(payload: SubmissionPayload, model: str, field_label: str) -> None:
+    provider = payload.llm_provider.lower()
+    api_key = _read_provider_api_key(provider)
+    base_url = resolve_provider_base_url(provider, payload.backend_url)
+
+    if provider != "ollama" and not api_key:
+        raise UnsupportedModelError(
+            f"模型不可用：{model}。缺少 { _PROVIDER_API_KEY_ENVS[provider] }，无法完成运行前探测。"
+        )
+
+    client = OpenAI(
+        api_key=api_key or "ollama",
+        base_url=base_url,
+        timeout=_RUNTIME_PROBE_TIMEOUT,
+    )
+    try:
+        client.chat.completions.create(
+            model=model,
+            messages=_RUNTIME_PROBE_PROMPT,
+            max_tokens=1,
+        )
+    except (APIStatusError, APIError) as exc:
+        _raise_probe_failure(field_label, model, str(exc))
+    except Exception as exc:  # pragma: no cover - defensive mapping
+        _raise_probe_failure(field_label, model, str(exc))
+
+
+def _probe_azure_runtime(payload: SubmissionPayload, model: str, field_label: str) -> None:
+    azure_endpoint = resolve_provider_base_url("azure", payload.backend_url)
+    api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    api_version = os.getenv("OPENAI_API_VERSION", "2025-03-01-preview")
+
+    if not azure_endpoint:
+        raise UnsupportedModelError(
+            f"模型不可用：{model}。缺少 AZURE_OPENAI_ENDPOINT，无法完成运行前探测。"
+        )
+    if not api_key:
+        raise UnsupportedModelError(
+            f"模型不可用：{model}。缺少 AZURE_OPENAI_API_KEY，无法完成运行前探测。"
+        )
+
+    client = AzureOpenAI(
+        api_key=api_key,
+        azure_endpoint=azure_endpoint,
+        api_version=api_version,
+        timeout=_RUNTIME_PROBE_TIMEOUT,
+    )
+    try:
+        client.chat.completions.create(
+            model=model,
+            messages=_RUNTIME_PROBE_PROMPT,
+            max_tokens=1,
+        )
+    except (APIStatusError, APIError) as exc:
+        _raise_probe_failure(field_label, model, str(exc))
+    except Exception as exc:  # pragma: no cover - defensive mapping
+        _raise_probe_failure(field_label, model, str(exc))
+
+
+def probe_runtime_model_availability(payload: SubmissionPayload, model: str, field_label: str) -> None:
+    provider = payload.llm_provider.lower()
+
+    if provider in _OPENAI_COMPATIBLE_PROVIDERS:
+        _probe_openai_compatible_runtime(payload, model, field_label)
+        return
+
+    if provider == "azure":
+        _probe_azure_runtime(payload, model, field_label)
+        return
+
+
+def preflight_validate_submission(payload: SubmissionPayload) -> None:
+    checked_models: set[str] = set()
+    for field_label, model in (
+        ("快速模型", payload.quick_think_llm),
+        ("深度模型", payload.deep_think_llm),
+    ):
+        normalized_model = model.strip()
+        if not normalized_model:
+            raise UnsupportedModelError(f"{field_label}不能为空。")
+        if not validate_model(payload.llm_provider, normalized_model):
+            raise UnsupportedModelError(
+                f"模型不可用：{normalized_model}。当前网关不支持这个模型，请改用 gpt-5.4 或检查网关配置。"
+            )
+        if normalized_model in checked_models:
+            continue
+        checked_models.add(normalized_model)
+        probe_runtime_model_availability(payload, normalized_model, field_label)
 
 
 def build_form_options() -> FormOptionsResponse:
@@ -189,13 +361,17 @@ def build_form_options() -> FormOptionsResponse:
         }
         for provider, mode_map in MODEL_OPTIONS.items()
     }
+    for provider, provider_mode_options in model_options.items():
+        provider_mode_options["main"] = _build_main_model_options(provider, provider_mode_options)
     model_options["azure"] = {
         "quick": [{"label": "自定义部署名称", "value": ""}],
         "deep": [{"label": "自定义部署名称", "value": ""}],
+        "main": [{"label": "自定义部署名称", "value": ""}],
     }
     model_options["openrouter"] = {
         "quick": [{"label": "自定义模型 ID", "value": ""}],
         "deep": [{"label": "自定义模型 ID", "value": ""}],
+        "main": [{"label": "自定义模型 ID", "value": ""}],
     }
     defaults = {
         "ticker": "SPY",
@@ -205,7 +381,8 @@ def build_form_options() -> FormOptionsResponse:
         "research_depth": 1,
         "llm_provider": "openai",
         "backend_url": get_provider_base_url("openai"),
-        "quick_think_llm": get_model_options("openai", "quick")[0][1],
+        "main_model": "gpt-5.4",
+        "quick_think_llm": "gpt-5.4",
         "deep_think_llm": get_model_options("openai", "deep")[0][1],
         "google_thinking_level": "high",
         "openai_reasoning_effort": "medium",
@@ -234,6 +411,7 @@ def build_form_options() -> FormOptionsResponse:
                 {"label": "低", "value": "low"},
             ],
         },
+        field_help=FIELD_HELP,
     )
 
 
